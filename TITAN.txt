@@ -1,0 +1,47 @@
+CONFIG:CATALINA:c:/jakarta-tomcat
+CONFIG:OPENEJB:c:/openejb-1.0
+
+# Define the project name
+PROJECT:titan:Titan Vacances
+
+# Enable Lazy loading (not fully functional)
+LAZY_LOADING:COLLECTIONS:FIELDS:FKS
+
+# Define a global DataSource Resource
+RESOURCE:DATASOURCE:dbserver:jdbc/titan:mysql:IDENTITY
+
+# define a CMP entity bean
+ENTITY:CMP:CABIN:cabin:com.titan.j2ee
+
+  # inside jndi, this bean will be located under titan folder (optional)
+  JNDI-BASEPATH:titan
+
+  DESCRIPTION:Define a Cabin Object...
+
+  AUTHOR:Paulo Lopes
+
+  FIELD:integer:CABIN_ID:id:not null:ro:pk
+  FIELD:integer:SHIP_ID:ship:null:rw:fk
+  FIELD:integer:CABIN_BED_COUNT:bedCount:null
+  # i changed char(30) to varchar
+  FIELD:varchar:CABIN_NAME:name:not null
+  FIELD:integer:CABIN_DECK_LEVEL:deckLevel:null
+
+  # this bean will have a datasource resource
+  RESOURCE-LINK:dbserver
+
+ENTITY:CMP:SHIP:ship:com.titan.j2ee
+
+  JNDI-BASEPATH:titan
+
+  AUTHOR:Paulo Lopes
+
+  # I don't like BigDecimal... so i'll trick Castor
+  FIELD:integer:SHIP_ID:id:not null:ro:pk
+  FIELD:varchar:SHIP_NAME:name:null
+  FIELD:integer:SHIP_CAPACITY:capacity:null
+  FIELD:double:SHIP_TONNAGE:tonnage:null
+
+  RESOURCE-LINK:dbserver
+  # define collections here...
+  COLLECTION:1-*:cabin
