@@ -13,19 +13,14 @@ public class BeanGen
 	// the collection of ejbs to generate
 	private Vector ejbs = new Vector();
 	private Vector resources = new Vector();
+	private PROJECT project = new PROJECT();
+	private CONFIG config = new CONFIG();
 
 	// line feed
 	private static String lf = System.getProperty("line.separator");
+	private static final String DOLLAR = "$";
 	// version
-	public static final String VERSION = "0.7 - Nitrogen";
-
-	// runtime temporary parser objectecs
-	private FIELD field = null;
-	private EJB ejb = null;
-	private RESOURCE res = null;
-	private PROJECT project = new PROJECT();
-	private BEANGEN_CONFIG config = new BEANGEN_CONFIG();
-
+	public static final String VERSION = "0.8 - Oxygen";
 
 	// generates a simple header for all classes
 	// it's a simple copyright message compatible with open source
@@ -45,8 +40,6 @@ public class BeanGen
 		code.append(" * particular purpose, or non-infringement, are disclaimed, except to the" + lf);
 		code.append(" * extent that such disclaimers are held to be legally invalid." + lf);
 		code.append(" * " + lf);
-		code.append(" * @author " + ejb.author + lf);
-		code.append(" * " + lf);
 
 		return code.toString();
 	}
@@ -54,13 +47,14 @@ public class BeanGen
 	// Generate the web.xml file for the webapp
 	// it won't generate the full file, just the needed part to enable JNDI work
 	// and be available under the full webapp
-	private String tomcat_webapp_web_xml()
+	protected String tomcat_webapp_web_xml()
 	{
 		FIELD field = null;
 		EJB ejb = null;
 
 		StringBuffer code = new StringBuffer();
 
+		// base for every web.xml file
 		code.append(
 			"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>" + lf +
 			"<!DOCTYPE web-app PUBLIC \"-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN\" \"http://java.sun.com/dtd/web-app_2_3.dtd\">" + lf +
@@ -72,24 +66,14 @@ public class BeanGen
 		{
 			ejb = (EJB)ejbs.elementAt(i);
 
-			// web.xml
+			// define the ejb-ref
 			code.append(
 				"  <ejb-ref>" + lf +
-				"    <description>EJB reference to bean " + ejb.name + "</description>" + lf +
-				"    <ejb-ref-name>ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "</ejb-ref-name>" + lf +
-				"    <ejb-ref-type>"
-			);
-
-			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
-				code.append("Entity");
-			else if(ejb.type==EJB.STATEFULL || ejb.type == EJB.STATELESS)
-				code.append("Session");
-			else if(ejb.type==EJB.MESSAGE)
-				System.err.println("Don't Know how to handle MessageBeans yet...");
-
-			 code.append("</ejb-ref-type>" + lf +
-				"    <home>" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home</home>" + lf +
-				"    <remote>" + ejb.app_package + "." + toSunClassName(ejb.name) + "</remote>" + lf +
+				"    <description>EJB reference to bean " + TextUtils.toSunClassName(ejb.name) + "</description>" + lf +
+				"    <ejb-ref-name>ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "</ejb-ref-name>" + lf +
+				"    <ejb-ref-type>" + ejb.getType() + "</ejb-ref-type>" + lf +
+				"    <home>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home</home>" + lf +
+				"    <remote>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "</remote>" + lf +
 				"  </ejb-ref>" + lf + lf
 			);
 
@@ -116,18 +100,8 @@ public class BeanGen
 
 			// server.xml
 			code.append(
-				"<Ejb name=\"ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\" type=\""
-			);
-
-			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
-				code.append("Entity");
-			else if(ejb.type==EJB.STATEFULL || ejb.type==EJB.STATELESS)
-				code.append("Session");
-			else if(ejb.type==EJB.MESSAGE)
-				System.err.println("Don't know how to handle MessageBeans yet...");
-
-			code.append("\" home=\"" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home\" remote=\"" + ejb.app_package + "." + toSunClassName(ejb.name) + "\" />" + lf +
-				"<ResourceParams name=\"ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\">" + lf +
+				"<Ejb name=\"ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\" type=\"" + ejb.getType() + "\" home=\"" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home\" remote=\"" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "\" />" + lf +
+				"<ResourceParams name=\"ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\">" + lf +
 				"  <parameter>" + lf +
 				"    <name>factory</name>" + lf +
 				"    <value>org.openejb.client.TomcatEjbFactory</value>" + lf +
@@ -138,7 +112,7 @@ public class BeanGen
 				"  </parameter>" + lf +
 				"  <parameter>" + lf +
 				"    <name>openejb.ejb-link</name>" + lf +
-				"    <value>" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "</value>" + lf +
+				"    <value>" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "</value>" + lf +
 				"  </parameter>" + lf +
 				"</ResourceParams>" + lf
 			);
@@ -170,33 +144,26 @@ public class BeanGen
 		{
 			ejb = (EJB)ejbs.elementAt(i);
 
-			String pk_type = null;
-			String pk_name = null;
-
-			for(int j=0; j<ejb.fields.size(); j++)
-			{
-				if(((FIELD)ejb.fields.elementAt(j)).pk)
-				{
-					pk_type = ((FIELD)ejb.fields.elementAt(j)).type;
-					pk_name = ((FIELD)ejb.fields.elementAt(j)).name;
-					break;
-				}
-			}
-
 			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
 			{
 				code.append(
-				"    <entity>" + lf +
-				"       <ejb-name>" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "</ejb-name>" + lf +
-				"       <home>" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home</home>" + lf +
-				"       <remote>" + ejb.app_package + "." + toSunClassName(ejb.name) + "Remote</remote>" + lf +
-				"       <ejb-class>" + ejb.app_package + "." + toSunClassName(ejb.name) + "EJB</ejb-class>" + lf +
-				"       <persistence-type>" + (ejb.type==EJB.BMP?"Bean":"") + (ejb.type==EJB.CMP?"Container":"") + "</persistence-type>" + lf +
-				"       <prim-key-class>" + toJavaType(pk_type) + "</prim-key-class>" + lf);
+					"    <entity>" + lf +
+					"       <ejb-name>" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "</ejb-name>" + lf +
+					"       <home>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home</home>" + lf +
+					"       <remote>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Remote</remote>" + lf +
+					"       <ejb-class>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "EJB</ejb-class>" + lf +
+					"       <persistence-type>" + ejb.getManagementType() + "</persistence-type>" + lf
+				);
+				// sql types are managed from jdbc driver so it's a better choice than FieldType
+				if(ejb.needsPkObject())
+					code.append("       <prim-key-class>" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name + "_p_k") + "</prim-key-class>" + lf);
+				else
+					code.append("       <prim-key-class>" + TextUtils.toSQLType(ejb.getPkType()) + "</prim-key-class>" + lf);
 
 				if(ejb.type == EJB.CMP)	// CMP
 				{
-					code.append("       <primkey-field>" + pk_name + "</primkey-field>" + lf);
+					if(!ejb.needsPkObject())
+						code.append("       <primkey-field>" + TextUtils.toSunMethodName(ejb.getPkName()) + "</primkey-field>" + lf);
 				}
 
 				code.append("       <reentrant>False</reentrant>" + lf);
@@ -206,7 +173,7 @@ public class BeanGen
 					for(int j=0; j<ejb.fields.size(); j++)
 					{
 						field = (FIELD)ejb.fields.elementAt(j);
-						code.append("       <cmp-field><field-name>" + field.name + (field.fk?"Id":"") + "</field-name></cmp-field>" + lf);
+						code.append("       <cmp-field><field-name>" + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "</field-name></cmp-field>" + lf);
 					}
 				}
 
@@ -217,12 +184,11 @@ public class BeanGen
 					code.append(
 					"       <resource-ref>" + lf +
 					"           <res-ref-name>" + res.jndi + "</res-ref-name>" + lf +
-					"           <res-type>" + (res.type==res.DATASOURCE?"javax.sql.DataSource":"UNDEFINED") + "</res-type>" + lf +
+					"           <res-type>" + res.getResourceType() + "</res-type>" + lf +
 					"           <res-auth>Container</res-auth>" + lf +
 					"       </resource-ref>" + lf
 					);
 				}
-
 				code.append("     </entity>" + lf);
 			}
 		}
@@ -240,10 +206,10 @@ public class BeanGen
 				code.append(
 					"    <container-transaction>" + lf +
 					"      <method>" + lf +
-					"        <ejb-name>" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "</ejb-name>" + lf +
+					"        <ejb-name>" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "</ejb-name>" + lf +
 					"        <method-name>*</method-name>" + lf +
 					"      </method>" + lf +
-					"      <trans-attribute>Supports</trans-attribute>" + lf +
+					"      <trans-attribute>" + ejb.transaction + "</trans-attribute>" + lf +
 					"    </container-transaction>" + lf
 				);
 			}
@@ -256,12 +222,15 @@ public class BeanGen
 		return code.toString();
 	}
 
-
 	// generates a default openejb.conf file
 	private String openejb_conf_xml()
 	{
 		StringBuffer code = new StringBuffer();
+		EJB ejb = null;
+		RESOURCE res = null;
 
+		// know how many beans we have for each kind
+		// if the count is > 0 then define the container
 		int cmp = 0;
 		int bmp = 0;
 		int statefull = 0;
@@ -285,7 +254,7 @@ public class BeanGen
 
 		if(cmp > 0)
 			code.append(
-				"  <Container id=\"" + (project.name==null?"Default":project.name) + " CMP Container\" ctype=\"CMP_ENTITY\">" + lf +
+				"  <Container id=\"" + project.getName() + " CMP Container\" ctype=\"CMP_ENTITY\">" + lf +
 				"    PoolSize 100" + lf +
 				"    Global_TX_Database  " + config.openejb_home + "/conf/cmp_global_database.xml" + lf +
 				"    Local_TX_Database   " + config.openejb_home + "/conf/cmp_local_database.xml" + lf +
@@ -294,12 +263,12 @@ public class BeanGen
 
 		if(bmp > 0)
 			code.append(
-				"  <Container id=\"" + (project.name==null?"Default":project.name) + " BMP Container\" ctype=\"BMP_ENTITY\" />" + lf + lf
+				"  <Container id=\"" + project.getName() + " BMP Container\" ctype=\"BMP_ENTITY\" />" + lf + lf
 			);
 
 		if(statefull > 0)
 			code.append(
-				"  <Container id=\"" + (project.name==null?"Default":project.name) + " STATEFULL Container\" ctype=\"STATEFUL\">" + lf +
+				"  <Container id=\"" + project.getName() + " STATEFULL Container\" ctype=\"STATEFUL\">" + lf +
 				"    Passivator   org.openejb.core.stateful.SimplePassivater" + lf +
 				"    # Passivator   org.openejb.core.stateful.RAFPassivater" + lf +
 				"    TimeOut  20" + lf +
@@ -310,21 +279,22 @@ public class BeanGen
 
 		if(stateless > 0)
 			code.append(
-				"  <Container id=\"" + (project.name==null?"Default":project.name) + " STATELESS Container\" ctype=\"STATELESS\">" + lf +
+				"  <Container id=\"" + project.getName() + " STATELESS Container\" ctype=\"STATELESS\">" + lf +
 				"    StrictPooling  true" + lf +
 				"  </Container>" + lf + lf
 			);
 
 		code.append(
-			"  <Deployments jar=\"" + config.openejb_home + "/lib/oejb_j2ee.jar\" />" + lf + lf
+			"  <Deployments jar=\"" + config.openejb_home + "/lib/" + project.unix_name + "_j2ee.jar\" />" + lf + lf
 		);
 
+		// define all connector we have
 		for(int i=0; i<resources.size(); i++)
 		{
 			res = (RESOURCE)resources.elementAt(i);
 			if(res.type == RESOURCE.DATASOURCE)
 				code.append(
-					"  <Connector id=\"" + (project.name==null?"Default":project.name) + " JDBC Database (" + res.name + ")\">" + lf +
+					"  <Connector id=\"" + project.getName() + " JDBC Database (" + res.name + ")\">" + lf +
 					"    JdbcDriver # your JDBC driver should go here..." + lf +
 					"    JdbcUrl # your JDBC url string goes here" + lf +
 					"    UserName username" + lf +
@@ -333,6 +303,8 @@ public class BeanGen
 				);
 		}
 
+		// found this in the sample config file. When loading is says that security
+		// is deprecated but when i remove it doesn't start... weird
 		code.append(
 			"  <ProxyFactory id=\"Default JDK 1.3 ProxyFactory\" />" + lf +
 			"  <SecurityService id=\"Default Security Service\" />" + lf +
@@ -341,7 +313,7 @@ public class BeanGen
 		);
 
 		if(message > 0)
-			System.out.println("Message EJB's not yet Supported");
+			System.err.println("Message EJB's not yet Supported");
 
 		return code.toString();
 	}
@@ -350,6 +322,7 @@ public class BeanGen
 	private String cmp_global_database_xml()
 	{
 		StringBuffer code = new StringBuffer();
+		EJB ejb = null;
 
 		int cmp = 0;
 
@@ -365,23 +338,22 @@ public class BeanGen
 
 		if(cmp > 0)
 		{
-			String engine = null;
-			String jndi = null;
+			RESOURCE res = null;
 			// get the first DataSource resource
 			for(int i=0; i<resources.size(); i++)
 			{
 				res = (RESOURCE)resources.elementAt(i);
 				if(res.type == RESOURCE.DATASOURCE)
 				{
-					engine = res.engine;
-					jndi = res.jndi;
 					break;
 				}
+				if(i == resources.size()-1)
+					System.err.println("DATASOURCE resource not found!");
 			}
 
 			code.append(
-				"<database name=\"Global_TX_Database\" engine=\"" + engine + "\">" + lf +
-				"  <jndi name=\"java:comp/env/" + jndi + "\" />" + lf +
+				"<database name=\"Global_TX_Database\" engine=\"" + res.engine + "\">" + lf +
+				"  <jndi name=\"java:comp/env/" + res.jndi + "\" />" + lf +
 				"  <mapping href=\"" + config.openejb_home + "/conf/cmp_or_mapping.xml\" />" + lf +
 				"</database>" + lf
 			);
@@ -394,51 +366,79 @@ public class BeanGen
 	private String cmp_or_mapping_xml()
 	{
 		StringBuffer code = new StringBuffer();
+		EJB ejb = null;
+		RESOURCE res = null;
+		FIELD field = null;
 
 		code.append("<?xml version=\"1.0\"?>" + lf);
 
 		code.append("<mapping>" + lf);
-		String key_gen = null;
+
 		// get the first DataSource resource
 		for(int i=0; i<resources.size(); i++)
 		{
 			res = (RESOURCE)resources.elementAt(i);
 			if(res.type == RESOURCE.DATASOURCE)
 			{
-				key_gen = res.key_gen;
 				break;
 			}
+			if(i == resources.size()-1)
+				System.err.println("DATASOURCE resource not found!");
 		}
 
+		// now the fun! generate the mappings (only cmp)
 		for(int i=0; i<ejbs.size(); i++)
 		{
 			ejb = (EJB)ejbs.elementAt(i);
 
 			if(ejb.type == EJB.CMP)
 			{
+				// define wich fields are the keys for a table
 				String identity = null;
 				for(int j=0; j<ejb.fields.size(); j++)
 				{
 					field = (FIELD)ejb.fields.elementAt(j);
 					if(field.pk)
 					{
-						identity = field.name;
-						break;
+						if(identity == null)
+							identity = TextUtils.toSunMethodName(field.name + (field.fk?"_id":""));
+						else
+							identity += " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":""));
 					}
 				}
 
+				if(identity == null)
+				{
+					// no pk defined so, assume all fk's compose the pk
+					for(int j=0; j<ejb.fields.size(); j++)
+					{
+						field = (FIELD)ejb.fields.elementAt(j);
+						if(field.fk)
+						{
+							if(identity == null)
+								identity = TextUtils.toSunMethodName(field.name + (field.fk?"_id":""));
+							else
+								identity += " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":""));
+						}
+					}
+				}
+
+				// define the object and the related table
 				code.append(
-					"  <class name=\"" + ejb.app_package + "." + toSunClassName(ejb.name) + "EJB\" identity=\"" + identity + "\" key-generator=\"" + key_gen + "\">" + lf +
-					"    <description>" + toSunClassName(ejb.name) + " definition</description>" + lf +
+					"  <class name=\"" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "EJB\" identity=\"" + identity + "\"" +
+						((identity.indexOf(" ")==-1)?(" key-generator=\"" + res.key_gen + "\""):("")) + ">" + lf +
+					"    <description>" + TextUtils.toSunClassName(ejb.name) + " definition</description>" + lf +
 					"    <map-to table=\"" + ejb.db_name + "\" />" + lf
 				);
 
+				// map the fields
+				// i'm trying to make it the most castor compatible
 				for(int j=0; j<ejb.fields.size(); j++)
 				{
 					field = (FIELD)ejb.fields.elementAt(j);
 					code.append(
-						"    <field name=\"" + field.name + (field.fk?"Id":"") + "\" type=\"" + toJavaType(field.type) + "\" direct=\"false\">" + lf +
-						"      <sql name=\"" + field.db_name + "\" type=\"" + field.type + "\"" + (field.pk?"":" dirty=\"check\"") + " />" + lf +
+						"    <field name=\"" + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "\" type=\"" + field.type + "\" direct=\"false\">" + lf +
+						"      <sql name=\"" + field.db_name + "\" type=\"" + field.db_type + "\"" + (field.pk?"":" dirty=\"check\"") + " />" + lf +
 						"    </field>" + lf
 					);
 				}
@@ -455,6 +455,8 @@ public class BeanGen
 	private String cmp_local_database_xml()
 	{
 		StringBuffer code = new StringBuffer();
+		EJB ejb = null;
+		RESOURCE res = null;
 
 		int cmp = 0;
 
@@ -470,22 +472,20 @@ public class BeanGen
 
 		if(cmp > 0)
 		{
-			String engine = null;
-			String jndi = null;
 			// get the first DataSource resource
 			for(int i=0; i<resources.size(); i++)
 			{
 				res = (RESOURCE)resources.elementAt(i);
 				if(res.type == RESOURCE.DATASOURCE)
 				{
-					engine = res.engine;
-					jndi = res.jndi;
 					break;
 				}
+				if(i == resources.size()-1)
+					System.err.println("DATASOURCE resource not found!");
 			}
 
 			code.append(
-				"<database name=\"Local_TX_Database\" engine=\"" + engine + "\">" + lf +
+				"<database name=\"Local_TX_Database\" engine=\"" + res.engine + "\">" + lf +
 				"  <driver class-name=\" # your JDBC driver class goes here \" url=\" # your JDBC url goes here\">" + lf +
 				"    <param name=\"user\" value=\"username\" />" + lf +
 				"    <param name=\"password\" value=\"password\" />" + lf +
@@ -498,9 +498,13 @@ public class BeanGen
 		return code.toString();
 	}
 
+	// this is a first approach to auto-deploy
 	private String openejb_jar_xml()
 	{
 		StringBuffer code = new StringBuffer();
+		EJB ejb = null;
+		FIELD field = null;
+		RESOURCE res = null;
 
 		code.append(
 			"<?xml version=\"1.0\" ?>" + lf +
@@ -513,30 +517,32 @@ public class BeanGen
 			ejb = (EJB)ejbs.elementAt(i);
 
 			code.append(
-				"  <ejb-deployment ejb-name=\"" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\" deployment-id=\"" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\" container-id=\""
+				"  <ejb-deployment ejb-name=\"" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\" deployment-id=\"" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\" container-id=\""
 			);
 
 			if(ejb.type == EJB.CMP)
-				code.append((project.name==null?"Default":project.name) + " CMP Container");
+				code.append(project.getName() + " CMP Container");
 			else if(ejb.type == EJB.BMP)
-				code.append((project.name==null?"Default":project.name) + " BMP Container");
+				code.append(project.getName() + " BMP Container");
 			else if(ejb.type == EJB.STATEFULL)
-				code.append((project.name==null?"Default":project.name) + " STATEFULL Container");
+				code.append(project.getName() + " STATEFULL Container");
 			else if(ejb.type == EJB.STATELESS)
-				code.append((project.name==null?"Default":project.name) + " STATELESS Container");
+				code.append(project.getName() + " STATELESS Container");
 
 			code.append("\" >" + lf);
 
 			for(int j=0; j<ejb.resources.size(); j++)
 			{
-				RESOURCE res = (RESOURCE) ejb.resources.elementAt(j);
+				res = (RESOURCE) ejb.resources.elementAt(j);
 				if(res.type == RESOURCE.DATASOURCE)
 				{
 					code.append(
-						"    <resource-link res-ref-name=\"" + res.jndi + "\" res-id=\"" + (project.name==null?"Default":project.name) + " JDBC Database (" + res.name + ")\" />" + lf
+						"    <resource-link res-ref-name=\"" + res.jndi + "\" res-id=\"" + project.getName() + " JDBC Database (" + res.name + ")\" />" + lf
 					);
 					break;
 				}
+				if(j == ejb.resources.size()-1)
+					System.err.println("DATASOURCE resource not found!");
 			}
 
 			// findAll
@@ -546,46 +552,62 @@ public class BeanGen
 				"        <method-name>findAll</method-name>" + lf +
 				"        <method-params />" + lf +
 				"      </query-method>" + lf +
-				"      <object-ql>SELECT o FROM " + ejb.app_package + "." + toSunClassName(ejb.name) + "EJB o</object-ql>" + lf +
+				"      <object-ql>SELECT o FROM " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "EJB o</object-ql>" + lf +
 				"    </query>" + lf
 			);
 
 			// collections
 			// add 1 to Many RellationShips
-			EJB tmp_ejb = null;
-			COLLECTION tmp_col = null;
+			EJB ref_ejb = null;
+			COLLECTION col = null;
 
+			// search all other beans for references to this bean in theirs collections
 			for(int j=0; j<ejbs.size(); j++)
 			{
-				tmp_ejb = (EJB)ejbs.elementAt(j);
-				for(int k=0; k<tmp_ejb.collections.size(); k++)
+				ref_ejb = (EJB)ejbs.elementAt(j);
+				for(int k=0; k<ref_ejb.collections.size(); k++)
 				{
-					tmp_col = (COLLECTION)tmp_ejb.collections.elementAt(k);
+					col = (COLLECTION)ref_ejb.collections.elementAt(k);
 
 					// found a 1 to Many RelationShip
-					if(ejb.name.equals(tmp_col.obj_name))
+					if(ejb.name.equals(col.obj_name))
 					{
-						String _pk_type = null;
-
-						// acquire PK type
-						for(int a=0; a<tmp_ejb.fields.size(); a++)
-						{
-							field = (FIELD)tmp_ejb.fields.elementAt(a);
-							if(field.pk)
-							{
-								_pk_type = toJavaType(field.type);
-								break;
-							}
-						}
+						boolean found = false;
 						code.append(
 							"    <query>" + lf +
-							"      <query-method>" + lf +
-							"        <method-name>findBy" + toSunClassName(tmp_ejb.name) + "</method-name>" + lf +
+							"      <query-method>" + lf
+						);
+
+						// we need a fk to generate the name fo the finder, if no fk is found object name will be used instead
+//						if(ejb.name.equals(col.getAlias()))
+//						{
+							// we need a fk to generate the name fo the finder, if no fk is found object name will be used instead
+							for(int a=0; a<ref_ejb.fields.size(); a++)
+							{
+								field = (FIELD)ref_ejb.fields.elementAt(a);
+								if(field.fk &&
+									(
+										field.db_name.equals(ejb.getPkDbName()) || field.db_alias.equals(ejb.getPkDbName())
+									)
+								)
+								{
+									code.append("        <method-name>findBy" + TextUtils.toSunClassName(field.name) + "</method-name>" + lf);
+									found = true;
+									break;
+								}
+							}
+							if(!found)
+								code.append("        <method-name>findBy" + TextUtils.toSunClassName(ref_ejb.name) + "</method-name>" + lf);
+//						}
+//						else
+//							code.append("        <method-name>findBy" + TextUtils.toSunClassName(col.getAlias()) + "</method-name>" + lf);
+
+						code.append(
 							"        <method-params>" + lf +
-							"          <method-param xmlns=\"http://www.openejb.org/ejb-jar/1.1\">" + _pk_type + "</method-param>" + lf +
+							"          <method-param xmlns=\"http://www.openejb.org/ejb-jar/1.1\">" + TextUtils.toJavaFieldType(ref_ejb.getPkType()) + "</method-param>" + lf +
 							"        </method-params>" + lf +
 							"      </query-method>" + lf +
-							"      <object-ql>SELECT o FROM " + ejb.app_package + "." + toSunClassName(ejb.name) + "EJB o WHERE o." + toSunMethodName(tmp_ejb.name + "_id") + " = $1</object-ql>" + lf +
+							"      <object-ql>SELECT o FROM " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "EJB o WHERE o." + TextUtils.toSunMethodName(ref_ejb.name + "_id") + " = $1</object-ql>" + lf +
 							"    </query>" + lf
 						);
 					}
@@ -601,9 +623,170 @@ public class BeanGen
 		return code.toString();
 	}
 
+	////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////
 
-	////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////
+	private String pk(EJB ejb)
+	{
+		StringBuffer code = new StringBuffer();
+		FIELD field = null;
+		// Home Interface
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
+		code.append("package " + ejb.app_package + ";" + lf);
+		code.append(lf);
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "PK" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public class " + TextUtils.toSunClassName(ejb.name) + "PK implements java.io.Serializable {" + lf + lf);
+
+		StringBuffer sb = new StringBuffer();
+		int fks = 0;
+		for(int i=0; i<ejb.fields.size(); i++)
+		{
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.fk)
+			{
+				code.append("    public " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name) + ";" + lf);
+				sb.append(TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name) + ", ");
+				fks++;
+			}
+		}
+
+		if(sb.length()>0)
+			sb.setLength(sb.length() - 2);
+
+ 		code.append(lf);
+ 		code.append("    public " + TextUtils.toSunClassName(ejb.name) + "PK(" + sb.toString() + ") {");
+		for(int i=0; i<ejb.fields.size(); i++)
+		{
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.fk)
+				code.append("        this." + TextUtils.toSunMethodName(field.name) + " = " + TextUtils.toSunMethodName(field.name) + ";" + lf);
+		}
+ 		code.append("    }" + lf + lf);
+ 		code.append("    public " + TextUtils.toSunClassName(ejb.name) + "PK() {}" + lf + lf);
+
+ 		code.append("    public int hashCode() {" + lf);
+ 		code.append("        // return a hash code here - the one supplied" + lf);
+ 		code.append("        // below may not be optimal for this bean" + lf);
+ 		code.append("        return (int)(" + lf);
+
+ 		int tmp_fks = 0;
+		for(int i=0; i<ejb.fields.size(); i++)
+		{
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.fk)
+			{
+				if(TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
+ 				{
+ 					if("int".equals(TextUtils.toJavaFieldType(field.type)))
+ 					{
+ 						tmp_fks++;
+ 						code.append("            (this." + TextUtils.toSunMethodName(field.name) + ") ");
+ 						if(tmp_fks == fks)
+ 							code.append(");" + lf);
+ 						else
+ 							code.append("*" + lf);
+ 					}
+ 					else
+ 					{
+ 						tmp_fks++;
+ 						code.append("            ((int) this." + TextUtils.toSunMethodName(field.name) + ") ");
+ 						if(tmp_fks == fks)
+ 							code.append(");" + lf);
+ 						else
+ 							code.append("*" + lf);
+ 					}
+ 				}
+ 				else
+ 				{
+					tmp_fks++;
+					code.append("            this." + TextUtils.toSunMethodName(field.name) + ".hashCode() ");
+					if(tmp_fks == fks)
+						code.append(");" + lf);
+					else
+						code.append("*" + lf);
+ 				}
+ 			}
+ 		}
+ 		code.append("    }" + lf + lf);
+
+ 		code.append("    public boolean equals(Object o) {" + lf);
+ 		code.append("        if(!(o instanceof " + TextUtils.toSunClassName(ejb.name) + "PK)) {" + lf);
+ 		code.append("            return false;" + lf);
+ 		code.append("        }" + lf);
+ 		code.append("        " + TextUtils.toSunClassName(ejb.name) + "PK o2 = (" + TextUtils.toSunClassName(ejb.name) + "PK) o;" + lf);
+ 		code.append("        return (" + lf);
+ 		tmp_fks = 0;
+		for(int i=0; i<ejb.fields.size(); i++)
+		{
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.fk)
+			{
+				if(TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
+ 				{
+					tmp_fks++;
+					code.append("            (this." + TextUtils.toSunMethodName(field.name) + " == o2."  + TextUtils.toSunMethodName(field.name) + ")");
+					if(tmp_fks == fks)
+						code.append(");" + lf);
+					else
+						code.append(" && " + lf);
+ 				}
+ 				else
+ 				{
+					tmp_fks++;
+					code.append("            this." + TextUtils.toSunMethodName(field.name) + ".equals(o2."  + TextUtils.toSunMethodName(field.name) + ")");
+					if(tmp_fks == fks)
+						code.append(");" + lf);
+					else
+						code.append(" && " + lf);
+ 				}
+ 			}
+ 		}
+ 		code.append("    }" + lf + lf);
+
+ 		code.append("    public String toString() {" + lf);
+ 		code.append("        return (" + lf);
+ 		tmp_fks = 0;
+		for(int i=0; i<ejb.fields.size(); i++)
+		{
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.fk)
+			{
+				if(TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
+ 				{
+					tmp_fks++;
+					code.append("            String.valueOf(this." + TextUtils.toSunMethodName(field.name) + ")");
+					if(tmp_fks == fks)
+						code.append(");" + lf);
+					else
+						code.append(" + \"/\" + " + lf);
+ 				}
+ 				else
+ 				{
+					tmp_fks++;
+					code.append("            this." + TextUtils.toSunMethodName(field.name) + ".toString()");
+					if(tmp_fks == fks)
+						code.append(");" + lf);
+					else
+						code.append(" + \"/\" + " + lf);
+ 				}
+ 			}
+ 		}
+ 		code.append("    }" + lf + lf);
+ 		code.append("}" + lf);
+
+ 		return code.toString();
+	}
 
 	// Generate the home interface for our EJB
 	// Home interfaces are interfaces that let us access the ejb beans
@@ -614,18 +797,10 @@ public class BeanGen
 		StringBuffer code = new StringBuffer();
 
 		// Home Interface
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
 		code.append("package " + ejb.app_package + ";" + lf);
 		code.append(lf);
-		code.append(getHeader(ejb) + lf);
-		code.append(" * Implementation of " + ejb.app_package + "." + toSunClassName(ejb.name) + "Home" + lf);
-		code.append(" * " + lf);
-		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
- 		code.append(" * " + lf);
- 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
- 		code.append(" * " + lf);
- 		code.append(" * $Id$" + lf);
- 		code.append(" */" + lf);
- 		code.append(lf);
 		code.append("// Standard packages" + lf);
 		code.append("import java.rmi.RemoteException;" + lf);
 		code.append("import java.util.Collection;" + lf);
@@ -637,97 +812,115 @@ public class BeanGen
 		code.append("import javax.ejb.FinderException;" + lf);
 		code.append("  //add your own packages here" + lf);
 		code.append(lf);
-		code.append("public interface " + toSunClassName(ejb.name) + "Home extends EJBHome {" + lf + lf);
-
-		// default methods
-		String pk_type = null;
-		for(int j=0; j<ejb.fields.size(); j++)
-		{
-			if(((FIELD)ejb.fields.elementAt(j)).pk)
-			{
-				pk_type = ((FIELD)ejb.fields.elementAt(j)).type;
-				break;
-			}
-		}
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public interface " + TextUtils.toSunClassName(ejb.name) + "Home extends EJBHome {" + lf + lf);
 
 		// get all not null fields and force them into the create method
 		StringBuffer create_params = new StringBuffer();
 
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			if(!field.nullable && !field.pk)
-				create_params.append( toJavaType(field.type) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
+				create_params.append( TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
 		}
 
+		// cut the extra ', ' chars
 		if(create_params.length() > 0)
 			create_params.setLength( create_params.length() - 2 );
 
 		code.append("    /**" + lf);
-		code.append("     * Creates a proxy object for " + toSunClassName(ejb.name) + lf);
+		code.append("     * Creates a proxy object for " + TextUtils.toSunClassName(ejb.name) + lf);
 		code.append("     * " + lf);
-		for(int j=0; j<ejb.fields.size(); j++)
+		// define the javadoc
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			if(!field.nullable && !field.pk)
-				code.append("     * @param " + toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
+				code.append("     * @param " + TextUtils.toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
 		}
-		code.append("     * @return Remote interface for proxy " + toSunClassName(ejb.name) + "Remote" + lf);
+		code.append("     * @return Remote interface for proxy " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
 		code.append("     */" + lf);
-		code.append("    public " + toSunClassName(ejb.name) + "Remote create(" + create_params.toString() +") throws CreateException, RemoteException;" + lf + lf);
+		code.append("    public " + TextUtils.toSunClassName(ejb.name) + "Remote create(" + create_params.toString() +") throws CreateException, RemoteException;" + lf + lf);
 
+		// ready made methods for all beans
 		code.append("    /**" + lf);
-		code.append("     * Finds an entry in the storage for your entities " + toSunClassName(ejb.name) + lf);
+		code.append("     * Finds an entry in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
 		code.append("     * " + lf);
 		code.append("     * @param key Primary Key that identifies the entry" + lf);
-		code.append("     * @return Remote interface for proxy " + toSunClassName(ejb.name) + "Remote" + lf);
+		code.append("     * @return Remote interface for proxy " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
 		code.append("     */" + lf);
-		code.append("    public " + toSunClassName(ejb.name) + "Remote findByPrimaryKey(" + toJavaType(pk_type) + " key) throws FinderException, RemoteException;" + lf + lf);
+		code.append("    public " + TextUtils.toSunClassName(ejb.name) + "Remote findByPrimaryKey(" + TextUtils.toJavaObjectFieldType(ejb.getPkType()) + " key) throws FinderException, RemoteException;" + lf + lf);
 
 		code.append("    /**" + lf);
-		code.append("     * Finds all entries in the storage for your entities " + toSunClassName(ejb.name) + lf);
+		code.append("     * Finds all entries in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
 		code.append("     * " + lf);
-		code.append("     * @return Collection of interfaces for proxy " + toSunClassName(ejb.name) + "Remote" + lf);
+		code.append("     * @return Collection of interfaces for proxy " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
 		code.append("     */" + lf);
 		code.append("    public Collection findAll() throws FinderException, RemoteException;" + lf + lf);
 
-		// add 1 to Many RellationShips
-		EJB tmp_ejb = null;
-		COLLECTION tmp_col = null;
-
+		EJB ref_ejb = null;
 		for(int i=0; i<ejbs.size(); i++)
 		{
-			tmp_ejb = (EJB)ejbs.elementAt(i);
-			for(int j=0; j<tmp_ejb.collections.size(); j++)
+			COLLECTION col = null;
+			// add 1 to Many RellationShips
+			ref_ejb = (EJB)ejbs.elementAt(i);
+			for(int j=0; j<ref_ejb.collections.size(); j++)
 			{
-				tmp_col = (COLLECTION)tmp_ejb.collections.elementAt(j);
-
+				col = (COLLECTION)ref_ejb.collections.elementAt(j);
 				// found a 1 to Many RelationShip
-				if(ejb.name.equals(tmp_col.obj_name))
+				if(ejb.name.equals(col.obj_name))
 				{
-					String _pk_type = null;
-
-					// acquire PK type
-					for(int k=0; k<tmp_ejb.fields.size(); k++)
+					boolean found = false;
+					code.append("    /**" + lf);
+					code.append("     * Finds all entries in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
+					code.append("     * Where " + TextUtils.toSunClassName(ref_ejb.name) + " is the parameter used in query" + lf);
+					code.append("     * @param key parameter to use in Query" + lf);
+					code.append("     * @return Collection of interfaces for proxy " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
+					code.append("     */" + lf);
+					// we need a fk to generate the name fo the finder, if no fk is found object name will be used instead
+					if(ejb.name.equals(col.getAlias()))
 					{
-						field = (FIELD)tmp_ejb.fields.elementAt(k);
-						if(field.pk)
+						for(int k=0; k<ref_ejb.fields.size(); k++)
 						{
-							_pk_type = toJavaType(field.type);
-							break;
+							field = (FIELD)ref_ejb.fields.elementAt(k);
+							if(field.fk &&
+								(
+									field.db_name.equals(ejb.getPkDbName()) || field.db_alias.equals(ejb.getPkDbName())
+								)
+							)
+							{
+								code.append("// " + col.getAlias() + " - " + field.name + " - " + ref_ejb.name + lf);
+								code.append("    public Collection findBy" + TextUtils.toSunClassName(field.name) + "(" + TextUtils.toJavaFieldType(ref_ejb.getPkType()) + " key) throws FinderException, RemoteException;" + lf + lf);
+								found = true;
+								break;
+							}
+						}
+						if(!found)
+						{
+							code.append("// " + col.getAlias() + " - " + field.name + " - " + ref_ejb.name + lf);
+							code.append("    public Collection findBy" + TextUtils.toSunClassName(ref_ejb.name) + "(" + TextUtils.toJavaFieldType(ref_ejb.getPkType()) + " key) throws FinderException, RemoteException;" + lf + lf);
 						}
 					}
-					code.append("    /**" + lf);
-					code.append("     * Finds all entries in the storage for your entities " + toSunClassName(ejb.name) + lf);
-					code.append("     * Where " + lf);
-					code.append("     * " + toSunClassName(tmp_ejb.name) + " is the parameter used in query" + lf);
-					code.append("     * @param key parameter to use in Query" + lf);
-					code.append("     * @return Collection of interfaces for proxy " + toSunClassName(ejb.name) + "Remote" + lf);
-					code.append("     */" + lf);
-					code.append("    public Collection findBy" + toSunClassName(tmp_ejb.name) + "(" + _pk_type + " key) throws FinderException, RemoteException;" + lf + lf);
+					else
+					{
+						code.append("// " + col.getAlias() + " - " + field.name + " - " + ref_ejb.name + lf);
+						code.append("    public Collection findBy" + TextUtils.toSunClassName(col.getAlias()) + "(" + TextUtils.toJavaFieldType(ref_ejb.getPkType()) + " key) throws FinderException, RemoteException;" + lf + lf);
+					}
 				}
 			}
 		}
+
 		code.append("}" + lf);
 
 		return code.toString();
@@ -740,18 +933,10 @@ public class BeanGen
 		FIELD field = null;
 		StringBuffer code = new StringBuffer();
 
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
 		code.append("package " + ejb.app_package + ";" + lf);
 		code.append(lf);
-		code.append( getHeader(ejb) + lf);
-		code.append(" * Implementation of " + ejb.app_package + "." + toSunClassName(ejb.name) + "Remote (Remote Interface)" + lf);
-		code.append(" * " + lf);
-		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
- 		code.append(" * " + lf);
- 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
- 		code.append(" * " + lf);
- 		code.append(" * $Id$" + lf);
- 		code.append(" */" + lf);
- 		code.append(lf);
 		code.append("// Standard packages" + lf);
 		code.append("import java.rmi.RemoteException;" + lf);
 		code.append("  //add your needed standard packages here" + lf);
@@ -761,7 +946,18 @@ public class BeanGen
 		code.append("import ejb.impl.core.MandatoryFieldException;" + lf);
 		code.append("  //add your own packages here" + lf);
 		code.append(lf);
-		code.append("public interface " + toSunClassName(ejb.name) + "Remote extends EJBObject {" + lf + lf);
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public interface " + TextUtils.toSunClassName(ejb.name) + "Remote extends EJBObject {" + lf + lf);
 
 		// setter's
 		for(int j=0; j<ejb.fields.size(); j++)
@@ -770,10 +966,13 @@ public class BeanGen
 			if(!field.ro)
 			{
 				code.append("    /**" + lf);
-				code.append("     * Setter for field " + toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
-				code.append("     * @param " + toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
+				code.append("     * Setter for field " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
+				code.append("     * @param " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
 				code.append("     */" + lf);
-				code.append("    public void " + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + toJavaType(field.type) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable?"":", MandatoryFieldException") + ";" + lf);
+				if(field.nullable)
+					code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable?"":", MandatoryFieldException") + ";" + lf);
+				else
+					code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable?"":", MandatoryFieldException") + ";" + lf);
 				code.append(lf);
 			}
 		}
@@ -785,10 +984,13 @@ public class BeanGen
 		{
 			field = (FIELD)ejb.fields.elementAt(j);
 			code.append("    /**" + lf);
-			code.append("     * Getter for field " + toSunParameterName(field.name + (field.fk?"_id":"")) + (field.ro?" (READ ONLY)":"") + lf);
+			code.append("     * Getter for field " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + (field.ro?" (READ ONLY)":"") + lf);
 			code.append("     * @return the value for the field" + lf);
 			code.append("     */" + lf);
-			code.append("    public " + toJavaType(field.type) + " " + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException;" + lf);
+			if(field.nullable)
+				code.append("    public " + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException;" + lf);
+			else
+				code.append("    public " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException;" + lf);
 			code.append(lf);
 		}
 
@@ -801,20 +1003,13 @@ public class BeanGen
 	private String entity_bean(EJB ejb)
 	{
 		FIELD field = null;
+		RESOURCE res = null;
 		StringBuffer code = new StringBuffer();
 
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
 		code.append("package " + ejb.app_package + ";" + lf);
 		code.append(lf);
-		code.append( getHeader(ejb));
-		code.append(" * Implementation of " + ejb.app_package + "." + toSunClassName(ejb.name) + "EJB" + lf);
-		code.append(" * " + lf);
-		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
- 		code.append(" * " + lf);
- 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
- 		code.append(" * " + lf);
- 		code.append(" * $Id$" + lf);
- 		code.append(" */" + lf);
- 		code.append(lf);
 		code.append("// Standard packages" + lf);
 		code.append("import java.util.Collection;" + lf);
 		code.append("import java.util.List;" + lf);
@@ -839,18 +1034,41 @@ public class BeanGen
 		code.append(((ejb.type == EJB.BMP)?"":"// ") + "import javax.sql.DataSource;" + lf);
 		code.append("  //add your own packages here" + lf);
 		code.append(lf);
-		code.append("public class " + toSunClassName(ejb.name) + "EJB extends EntityBeanAdapter {" + lf + lf);
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "EJB" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public class " + TextUtils.toSunClassName(ejb.name) + "EJB extends EntityBeanAdapter {" + lf + lf);
 
 		// Generate all the fields
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
-			code.append(
-				"    /**" + lf +
-				"     * The internal java object corresponding to the primitive database field " + ejb.db_name + "." + field.db_name + lf +
-				"     */" + lf +
-				"    public " + toJavaType(field.type) + " " + toSunMethodName(field.name + (field.fk?"_id":"")) + " = null;" + lf + lf
-			);
+			field = (FIELD)ejb.fields.elementAt(i);
+			if(field.nullable)
+			{
+				code.append(
+					"    /**" + lf +
+					"     * The internal java object corresponding to the non-native database field " + ejb.db_name + "." + field.db_name + "because it can be null" + lf +
+					"     */" + lf +
+					"    public " + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = null;" + lf + lf
+				);
+			}
+			else
+			{
+				code.append(
+					"    /**" + lf +
+					"     * The internal java object corresponding to the primitive database field " + ejb.db_name + "." + field.db_name + lf +
+					"     */" + lf +
+					"    public " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.getInitialValueFor(TextUtils.toJavaFieldType(field.type)) + ";" + lf + lf
+				);
+			}
 		}
 
 		if(ejb.type == ejb.BMP)
@@ -887,17 +1105,18 @@ public class BeanGen
 		code.append("            // Finds DataSource from JNDI" + lf);
 		code.append("            try {" + lf);
 
-		String data_source_jndi = null;
-
-		for(int j=0; j<ejb.resources.size(); j++)
+		for(int i=0; i<ejb.resources.size(); i++)
 		{
-			RESOURCE r = (RESOURCE) ejb.resources.elementAt(j);
-			if(r.type == r.DATASOURCE)
+			res = (RESOURCE) ejb.resources.elementAt(i);
+			if(res.type == RESOURCE.DATASOURCE)
 			{
-				data_source_jndi = r.jndi;
+				break;
 			}
+			if(i == ejb.resources.size()-1)
+				System.err.println("DATASOURCE resource not found!");
 		}
-		code.append("                dataSource = (DataSource)this.initContext.lookup(\"java:comp/env/" + data_source_jndi + "\");" + lf);
+
+		code.append("                dataSource = (DataSource)this.initContext.lookup(\"java:comp/env/" + res.jndi + "\");" + lf);
 		code.append("            } catch (Exception e) {" + lf);
 		code.append("                System.out.println(\"Cannot lookup dataSource\" + e);" + lf);
 		code.append("                throw new EJBException(\"Cannot lookup dataSource\");" + lf);
@@ -910,49 +1129,38 @@ public class BeanGen
 		code.append(lf);
 
 		// setter's
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			code.append("    /**" + lf);
- 			code.append("     * Setter for field " + toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
- 			code.append("     * @param " + toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
+ 			code.append("     * Setter for field " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
+ 			code.append("     * @param " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
 			code.append("     */" + lf);
-			code.append("    public void " + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + toJavaType(field.type) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ") " + (field.nullable?"":"throws MandatoryFieldException ") + "{" + lf);
 			if(field.nullable)
- 			{
-				code.append("        // both internal and new fields are null, leave it as it is..." + lf);
-				code.append("        if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == null && this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " == null) return;" + lf);
-				code.append("        // both internal and new fields are equal, leave it as it is..." + lf);
-				code.append("        if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " != null && " + toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
-				code.append("        this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
-				if(ejb.type == ejb.BMP)
-					code.append("        this.dirty = true;" + lf);
-			}
- 			else
-			{
-				code.append("        // since the db field can't be null we won't allow you to set it null..." + lf);
-				code.append("        if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == null) throw new MandatoryFieldException(\"'" + toSunParameterName(field.name + (field.fk?"_id":"")) + "' can't be null.\");" + lf);
-				code.append("        // both internal and new fields are equal, leave it as it is..." + lf);
-				code.append("        if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
-				code.append("        this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
-				if(ejb.type == ejb.BMP)
-					code.append("        this.dirty = true;" + lf);
- 			}
+				code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") " + (field.nullable?"":"throws MandatoryFieldException ") + "{" + lf);
+			else
+				code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") " + (field.nullable?"":"throws MandatoryFieldException ") + "{" + lf);
+			code.append("        this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
+			if(ejb.type == ejb.BMP)
+				code.append("        this.dirty = true;" + lf);
 			code.append("    }" + lf);
 			code.append(lf);
 		}
 		code.append(lf);
 
 		// getter's
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			code.append("    /**" + lf);
-			code.append("     * Getter for field " + toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
+			code.append("     * Getter for field " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
 			code.append("     * @return the value for the field" + lf);
 			code.append("     */" + lf);
-			code.append("    public " + toJavaType(field.type) + " " + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() {" + lf);
-			code.append("        return this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ";" + lf);
+			if(field.nullable)
+				code.append("    public " + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() {" + lf);
+			else
+				code.append("    public " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() {" + lf);
+			code.append("        return this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ";" + lf);
 			code.append("    }" + lf);
 			code.append(lf);
 		}
@@ -961,13 +1169,14 @@ public class BeanGen
 		// get all not null and non pk fields and force them into the create method
 		StringBuffer create_params = new StringBuffer();
 
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			if(!field.nullable && !field.pk)
-				create_params.append( toJavaType(field.type) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
+				create_params.append( TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
 		}
 
+		// cut the extra ', ' chars
 		if(create_params.length() != 0)
 			create_params.setLength( create_params.length() - 2 );
 
@@ -977,39 +1186,22 @@ public class BeanGen
 		code.append("    /**" + lf);
 		code.append("     * create a new " + ejb.name + lf);
 		code.append("     * " +lf);
-		for(int j=0; j<ejb.fields.size(); j++)
+		for(int i=0; i<ejb.fields.size(); i++)
 		{
-			field = (FIELD)ejb.fields.elementAt(j);
+			field = (FIELD)ejb.fields.elementAt(i);
 			if(!field.nullable && !field.pk)
-				code.append("     * @param " + toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
+				code.append("     * @param " + TextUtils.toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
 		}
 		code.append("     * " + lf);
 
-		String pk_type = null;
-		String pk_name = null;
-		String pk_dbname = null;
-		StringBuffer sql_params = new StringBuffer();
-		StringBuffer sql_full_params = new StringBuffer();
-		StringBuffer sql_params2 = new StringBuffer();
-
-		for(int j=0; j<ejb.fields.size(); j++)
-		{
-			if(((FIELD)ejb.fields.elementAt(j)).pk)
-			{
-				pk_type = ((FIELD)ejb.fields.elementAt(j)).type;
-				pk_name = ((FIELD)ejb.fields.elementAt(j)).name;
-				pk_dbname = ((FIELD)ejb.fields.elementAt(j)).db_name;
-				break;
-			}
-		}
-		code.append("     * @return " + pk_name + " primary key" + lf);
+		code.append("     * @return " + ejb.getPkName() + " primary key" + lf);
 		code.append("     *" + lf);
 		code.append("     */" + lf);
-		code.append("    public " + toJavaType(pk_type) + " ejbCreate(" + create_params.toString() +") throws CreateException {" + lf + lf);
+		code.append("    public " + TextUtils.toSQLType(ejb.getPkType()) + " ejbCreate(" + create_params.toString() +") throws CreateException {" + lf + lf);
 
 		if(ejb.type == ejb.BMP)
 		{
-			code.append("        " + toJavaType(pk_type) + " pk = null;" + lf);
+			code.append("        " + TextUtils.toSQLType(ejb.getPkType()) + " pk = null;" + lf);
 			code.append("        Connection conn = null;" + lf);
 			code.append("        PreparedStatement stmt = null;" + lf);
 			code.append(lf);
@@ -1031,17 +1223,19 @@ public class BeanGen
 			{
 				field = (FIELD)ejb.fields.elementAt(j);
 				if(!field.nullable && !field.pk)
-					code.append("            this." + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + toSunParameterName(field.name + (field.fk?"_id":"")) + ");" + lf);
+					code.append("            this." + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ");" + lf);
 			}
 			code.append("        } catch(MandatoryFieldException e) {" + lf);
 			code.append("            // there's a null value in a mandatory field" + lf);
 			code.append("            System.err.println(\"Error in assigning values\");" + lf);
-			code.append("            throw new CreateException(\"" + toSunClassName(ejb.name) + " Failed to assign variable - \" + e.getMessage());" + lf);
+			code.append("            throw new CreateException(\"" + TextUtils.toSunClassName(ejb.name) + " Failed to assign variable - \" + e.getMessage());" + lf);
 			code.append("        }" + lf);
 
 			code.append(lf);
 		}
 		code.append("        // your extra code here" + lf);
+		StringBuffer sql_full_params = new StringBuffer();
+
 		if(ejb.type == EJB.BMP)
 		{
 			code.append("        String sql_cmd = null;" + lf);
@@ -1051,6 +1245,9 @@ public class BeanGen
 			code.append("            " + lf);
 			code.append("            // store Object state in DB" + lf);
 			code.append("            int arg = 1;" + lf);
+
+			StringBuffer sql_params = new StringBuffer();
+			StringBuffer sql_params2 = new StringBuffer();
 
 			for(int j=0; j<ejb.fields.size(); j++)
 			{
@@ -1082,20 +1279,20 @@ public class BeanGen
 				field = (FIELD)ejb.fields.elementAt(j);
 				if(!field.nullable)
 				{
-					code.append("            stmt.setObject(arg++, " + toSunParameterName(field.name + (field.fk?"_id":"")) + ");" + lf);
+					code.append("            stmt.setObject(arg++, " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ");" + lf);
 				}
 			}
 
 			code.append("            // TODO: set this variable with the PK value" + lf);
-			code.append("            // pk = new " + toJavaType(pk_type) + "(/* value here */);" + lf);
+			code.append("            // pk = new " + TextUtils.toJavaFieldType(ejb.getPkType()) + "(/* value here */);" + lf);
 			code.append("            if ( stmt.executeUpdate() != 1 ) {" + lf);
-			code.append("                throw new CreateException(\"" + toSunClassName(ejb.name) + " creation failed - \" + sql_cmd);" + lf);
+			code.append("                throw new CreateException(\"" + TextUtils.toSunClassName(ejb.name) + " creation failed - \" + sql_cmd);" + lf);
 			code.append("            }" + lf);
 			code.append("            // Throw DuplicateKeyException (if you can detect it)" + lf);
 			code.append("            //        } catch (DuplicateKeyException dex) {" + lf);
 			code.append("            //                throw dex;" + lf);
 			code.append("        } catch (SQLException ex) {" + lf);
-			code.append("            throw new CreateException(\"" + toSunClassName(ejb.name) + " Failed to add to database - \" + sql_cmd + \" - \" + ex.getMessage());" + lf);
+			code.append("            throw new CreateException(\"" + TextUtils.toSunClassName(ejb.name) + " Failed to add to database - \" + sql_cmd + \" - \" + ex.getMessage());" + lf);
 			code.append("        } finally {" + lf);
 			code.append("            // Always make sure result sets and statements are closed," + lf);
 			code.append("            // and the connection is returned to the pool" + lf);
@@ -1123,10 +1320,10 @@ public class BeanGen
 			code.append(lf);
 			code.append("        try {" + lf);
 			code.append("            // get a connection for this transaction context" + lf);
-			code.append("            " + toJavaType(pk_type) + " pk = (" + toJavaType(pk_type) + ") ejbContext.getPrimaryKey();" + lf);
+			code.append("            " + TextUtils.toJavaFieldType(ejb.getPkType()) + " pk = (" + TextUtils.toJavaFieldType(ejb.getPkType()) + ") ejbContext.getPrimaryKey();" + lf);
 			code.append("            conn = getConnection();" + lf);
 			code.append("            // find account in DB" + lf);
-			code.append("            String sql_cmd = \"SELECT " + sql_full_params.toString() + " FROM " + ejb.db_name + " WHERE " + ejb.db_name + "." + pk_dbname + " = ?\";" + lf);
+			code.append("            String sql_cmd = \"SELECT " + sql_full_params.toString() + " FROM " + ejb.db_name + " WHERE " + ejb.db_name + "." + ejb.getPkDbName() + " = ?\";" + lf);
 			code.append("            int arg = 1;" + lf);
 			code.append("            stmt = conn.prepareStatement( sql_cmd );" + lf);
 			code.append("            stmt.setObject(1, pk);" + lf);
@@ -1139,7 +1336,7 @@ public class BeanGen
 			for(int j=0; j<ejb.fields.size(); j++)
 			{
 				field = (FIELD)ejb.fields.elementAt(j);
-				code.append("                this." + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "( (" + toJavaType(field.type) + ") rs.getObject(arg++) );" + lf);
+				code.append("                this." + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "( (" + TextUtils.toJavaFieldType(field.type) + ") rs.getObject(arg++) );" + lf);
 			}
 
 			code.append("            } catch (MandatoryFieldException e) {" + lf);
@@ -1166,6 +1363,21 @@ public class BeanGen
 			code.append("    }" + lf + lf);
 		}
 
+		code.append("    /**" + lf);
+		code.append("     * Called after the creation of a new " + ejb.name + lf);
+		code.append("     * " +lf);
+		for(int j=0; j<ejb.fields.size(); j++)
+		{
+			field = (FIELD)ejb.fields.elementAt(j);
+			if(!field.nullable && !field.pk)
+				code.append("     * @param " + TextUtils.toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
+		}
+		code.append("     * " + lf);
+		code.append("     */" + lf);
+		code.append("    public void ejbPostCreate(" + create_params.toString() +") throws CreateException {" + lf);
+		code.append("        // add post create code for your bean" + lf);
+		code.append("    }" + lf + lf);
+
 		if(ejb.type == EJB.BMP)
 		{
 			code.append("    /*============================ ejbFind methods ===========================*/" + lf + lf);
@@ -1179,10 +1391,10 @@ public class BeanGen
 			code.append("     * " +lf);
 			code.append("     * @param key the primary key that identifies the object " + lf);
 			code.append("     * " + lf);
-			code.append("     * @return " + pk_name + " primary key" + lf);
+			code.append("     * @return " + ejb.getPkName() + " primary key" + lf);
 			code.append("     *" + lf);
 			code.append("     */" + lf);
-			code.append("    public " + toJavaType(pk_type) + " ejbFindByPrimaryKey(" + toJavaType(pk_type) + " key) throws ObjectNotFoundException, FinderException {" + lf);
+			code.append("    public " + TextUtils.toSQLType(ejb.getPkType()) + " ejbFindByPrimaryKey(" + TextUtils.toSQLType(ejb.getPkType()) + " key) throws ObjectNotFoundException, FinderException {" + lf);
 			code.append("        Connection conn = null;" + lf);
 			code.append("        PreparedStatement stmt = null;" + lf);
 			code.append("        ResultSet rs = null;" + lf);
@@ -1192,7 +1404,7 @@ public class BeanGen
 			code.append("            conn = getConnection();" + lf);
 			code.append("            " + lf);
 			code.append("            // find Object state in DB" + lf);
-			code.append("            sql_cmd = \"SELECT " + ejb.db_name + "." + pk_dbname + " FROM " + ejb.db_name + " WHERE " + ejb.db_name + "." + pk_dbname + " = ?\";" + lf);
+			code.append("            sql_cmd = \"SELECT " + ejb.db_name + "." + ejb.getPkDbName() + " FROM " + ejb.db_name + " WHERE " + ejb.db_name + "." + ejb.getPkDbName() + " = ?\";" + lf);
 			code.append("            stmt = conn.prepareStatement(sql_cmd);" + lf);
 			code.append("            stmt.setObject(1, key);" + lf);
 			code.append("            rs = stmt.executeQuery();" + lf);
@@ -1224,7 +1436,7 @@ public class BeanGen
 			code.append("     * " +lf);
 			code.append("     * @throws FinderException when there's an error finding some object" + lf);
 			code.append("     * " +lf);
-			code.append("     * @return " + pk_name + " primary key" + lf);
+			code.append("     * @return " + ejb.getPkName() + " primary key" + lf);
 			code.append("     *" + lf);
 			code.append("     */" + lf);
 			code.append("    public Collection ejbFindAll() throws FinderException {" + lf);
@@ -1238,7 +1450,7 @@ public class BeanGen
 			code.append("            conn = getConnection();" + lf);
 			code.append("            " + lf);
 			code.append("            // find Object state in DB" + lf);
-			code.append("            sql_cmd = \"SELECT " + ejb.db_name + "." + pk_dbname + " FROM " + ejb.db_name + "\";" + lf);
+			code.append("            sql_cmd = \"SELECT " + ejb.db_name + "." + ejb.getPkName() + " FROM " + ejb.db_name + "\";" + lf);
 			code.append("            stmt = conn.prepareStatement(sql_cmd);" + lf);
 			code.append("            rs = stmt.executeQuery();" + lf);
 			code.append("            while (rs.next())" + lf);
@@ -1265,54 +1477,295 @@ public class BeanGen
 			code.append("    }" + lf + lf);
 		}
 
+		code.append("}" + lf);
+		return code.toString();
+	}
+
+	// folks that use jsp most probably came from asp or some other micro$osf platform
+	// so thei're used to have a naive API's so i'll try to make it the simples possible
+	private String manager_bean(EJB ejb)
+	{
+		FIELD field = null;
+		RESOURCE res = null;
+
+		StringBuffer code = new StringBuffer();
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
+		code.append("package " + ejb.app_package + ";" + lf);
+		code.append(lf);
+		code.append("// Standard packages" + lf);
+		code.append("import java.util.Collection;" + lf);
+		code.append("import java.util.Iterator;" + lf);
+		code.append("import java.rmi.RemoteException;" + lf);
+		code.append("  //add your needed standard packages here" + lf);
+		code.append(lf);
+		code.append("// Extension packages" + lf);
+		code.append("import javax.ejb.CreateException;" + lf);
+		code.append("import javax.ejb.FinderException;" + lf);
+		code.append("import ejb.impl.util.Trace;" + lf);
+		code.append("import ejb.impl.util.BeanHomeFactory;" + lf);
+		code.append("import ejb.impl.util.BeanHomeFactoryException;" + lf);
+		code.append("  //add your own packages here" + lf);
+		code.append(lf);
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Manager" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public class " + TextUtils.toSunClassName(ejb.name) + "Manager {" + lf + lf);
+
 		code.append("    /**" + lf);
-		code.append("     * Called after the creation of a new " + ejb.name + lf);
-		code.append("     * " +lf);
+		code.append("     * Reference to a Home interface factory" + lf);
+		code.append("     */" + lf);
+		code.append("    private static BeanHomeFactory factory = null;" + lf + lf);
+
+		// define the constructor
+		code.append(
+			"    /**" + lf +
+			"     * Bean Manager Static initializer" + lf +
+			"     */" + lf +
+			"    private static void init() throws BeanHomeFactoryException {" + lf +
+			"        try {" + lf +
+			"            factory = BeanHomeFactory.getFactory();" + lf +
+			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
+			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw bhfe;" + lf +
+			"        }" + lf +
+			"    }" + lf + lf
+		);
+
+		// get all not null fields and force them into the create method
+		StringBuffer native_create_params = new StringBuffer();
+		StringBuffer ejb_create_params = new StringBuffer();
+
 		for(int j=0; j<ejb.fields.size(); j++)
 		{
 			field = (FIELD)ejb.fields.elementAt(j);
 			if(!field.nullable && !field.pk)
-				code.append("     * @param " + toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
+			{
+				native_create_params.append(TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
+				ejb_create_params.append(TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
+			}
 		}
-		code.append("     * " + lf);
-		code.append("     */" + lf);
-		code.append("    public void ejbPostCreate(" + create_params.toString() +") throws CreateException {" + lf);
-		code.append("        // add post create code for your bean" + lf);
-		code.append("    }" + lf + lf);
 
+		// remove the trailling ' ,'
+		if(native_create_params.length() > 0)
+		{
+			native_create_params.setLength( native_create_params.length() - 2 );
+			ejb_create_params.setLength( ejb_create_params.length() - 2 );
+		}
+
+		code.append("    /**" + lf);
+		code.append("     * Creates a proxy object for " + TextUtils.toSunClassName(ejb.name) + lf);
+		code.append("     * " + lf);
+		for(int j=0; j<ejb.fields.size(); j++)
+		{
+			field = (FIELD)ejb.fields.elementAt(j);
+			if(!field.nullable && !field.pk)
+				code.append("     * @param " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " " + lf);
+		}
+		code.append("     * @return Wrapper instance for a " + TextUtils.toSunClassName(ejb.name) + " proxy" + lf);
+		code.append("     */" + lf);
+		code.append(
+			"    public static synchronized " + TextUtils.toSunClassName(ejb.name) + " create(" + native_create_params.toString() + ") throws BeanHomeFactoryException, CreateException, RemoteException {" + lf +
+			"        try {" + lf +
+			"            if(factory == null) init();" + lf +
+			"            " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\");" + lf +
+			"            return new " + TextUtils.toSunClassName(ejb.name) + "(home.create(" + ejb_create_params.toString() + "));" + lf +
+			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
+			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw bhfe;" + lf +
+			"        } catch(CreateException ce) {" + lf +
+			"            Trace.errln(\"CreateException - \" + ce.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw ce;" + lf +
+			"        } catch(RemoteException re) {" + lf +
+			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw re;" + lf +
+			"        }" + lf +
+			"    }" + lf + lf
+		);
+
+		code.append("    /**" + lf);
+		code.append("     * Finds an entry in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
+		code.append("     * " + lf);
+		code.append("     * @param key Primary Key that identifies the entry" + lf);
+		code.append("     * @return Wrapper for " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
+		code.append("     */" + lf);
+		code.append(
+			"    public static synchronized " + TextUtils.toSunClassName(ejb.name) + " findByPrimaryKey(" + TextUtils.toJavaFieldType(ejb.getPkType()) + " key) throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
+			"        try {" + lf +
+			"            if(factory == null) init();" + lf +
+			"            " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\");" + lf +
+			"            return new " + TextUtils.toSunClassName(ejb.name) + "(home.findByPrimaryKey(" + TextUtils.getJavaObjectConstructorForNative(TextUtils.toJavaFieldType(ejb.getPkType()),"key") + "));" + lf +
+			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
+			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw bhfe;" + lf +
+			"        } catch(FinderException fe) {" + lf +
+			"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw fe;" + lf +
+			"        } catch(RemoteException re) {" + lf +
+			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw re;" + lf +
+			"        }" + lf +
+			"    }" + lf + lf
+		);
+
+		code.append("    /**" + lf);
+		code.append("     * Finds all entries in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
+		code.append("     * " + lf);
+		code.append("     * @return Wrapper for " + TextUtils.toSunClassName(ejb.name) + "Remote" + lf);
+		code.append("     */" + lf);
+		code.append(
+			"    public static synchronized " + TextUtils.toSunClassName(ejb.name) + "[] findAll() throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
+			"        try {" + lf +
+			"            if(factory == null) init();" + lf +
+			"            " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + ejb.getJNDIPath() + TextUtils.toSunClassName(ejb.name) + "\");" + lf +
+			"            Collection elements = home.findAll();" + lf +
+			"            if(elements == null)" + lf +
+			"                return null;" + lf +
+			"            else" + lf +
+			"            {" + lf +
+			"                " + TextUtils.toSunClassName(ejb.name) + "[] wrappers = new " + TextUtils.toSunClassName(ejb.name) + "[elements.size()];" + lf +
+			"                Iterator it = elements.iterator();" + lf +
+			"                int i = 0;" + lf +
+			"                while(it.hasNext()) {" + lf +
+			"                    wrappers[i++] = new " + TextUtils.toSunClassName(ejb.name) + "((" + TextUtils.toSunClassName(ejb.name) + "Remote)it.next());" + lf +
+			"                    it.remove();" + lf +
+			"                }" + lf +
+			"                it = null;" + lf +
+			"                elements = null;" + lf +
+			"                return wrappers;" + lf +
+			"            }" + lf +
+			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
+			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw bhfe;" + lf +
+			"        } catch(FinderException fe) {" + lf +
+			"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw fe;" + lf +
+			"        } catch(RemoteException re) {" + lf +
+			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
+			"            throw re;" + lf +
+			"        }" + lf +
+			"    }" + lf + lf
+		);
+
+		COLLECTION col_tmp = null;
+		FIELD field_tmp = null;
+		EJB ejb_tmp = null;
+		String pk_package = null;
+		String pk_type = null;
+
+		// find collections for other objects
+		for(int i=0; i<ejb.collections.size(); i++)
+		{
+			pk_package = null;
+			col_tmp = (COLLECTION)ejb.collections.elementAt(i);
+
+			String home_intf_name = null;
+			// navigate the oposite way as in home interface
+			for(int j=0; j<ejbs.size(); j++)
+			{
+				ejb_tmp = (EJB)ejbs.elementAt(j);
+				// found a 1 to Many RelationShip
+				if(ejb_tmp.name.equals(col_tmp.obj_name))
+				{
+					boolean found = false;
+					// we need a fk to generate the name fo the finder, if no fk is found object name will be used instead
+//					if(ejb.name.equals(col_tmp.getAlias()))
+//					{
+						for(int k=0; k<ejb_tmp.fields.size(); k++)
+						{
+							field = (FIELD)ejb_tmp.fields.elementAt(k);
+							if(field.fk &&
+								(
+									field.db_name.equals(ejb.getPkDbName()) || field.db_alias.equals(ejb.getPkDbName())
+								)
+							)
+							{
+								home_intf_name = field.name;
+								found = true;
+								break;
+							}
+						}
+						if(!found)
+							home_intf_name = ejb_tmp.name;
+//					}
+//					else
+//						home_intf_name = col_tmp.getAlias();
+				}
+			}
+
+			for(int k=0;k<ejbs.size(); k++)
+			{
+				ejb_tmp = (EJB)ejbs.elementAt(k);
+				if(col_tmp.obj_name.equals(ejb_tmp.name))
+				{
+					pk_package = ejb_tmp.app_package;
+					pk_type = TextUtils.toJavaFieldType(ejb.getPkType());
+					break;
+				}
+			}
+
+			code.append("    /**" + lf);
+			code.append("     * Finds all entries in the storage for your entities " + TextUtils.toSunClassName(ejb.name) + lf);
+			code.append("     * " + lf);
+			code.append("     * @return Wrapper for " + TextUtils.toSunClassName(col_tmp.obj_name) + "Remote" + lf);
+			code.append("     */" + lf);
+			code.append(
+				"    public static synchronized " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "[] " + TextUtils.toSunMethodName("get_" + TextUtils.toPlural(TextUtils.toSunClassName(col_tmp.getAlias()))) + "(" + pk_type + " key) throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
+				"        try {" + lf +
+				"            if(factory == null) init();" + lf +
+				"            " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "Home home = (" + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "Home)factory.getHome(" + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "Home.class, \"java:comp/env/ejb/" + ejb_tmp.getJNDIPath() + TextUtils.toSunClassName(ejb_tmp.name) + "\");" + lf +
+				"            Collection elements = home.findBy" + TextUtils.toSunClassName(home_intf_name) + "(key);" + lf +
+				"            if(elements == null)" + lf +
+				"                return null;" + lf +
+				"            else" + lf +
+				"            {" + lf +
+				"                " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "[] wrappers = new " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "[elements.size()];" + lf +
+				"                Iterator it = elements.iterator();" + lf +
+				"                int i = 0;" + lf +
+				"                while(it.hasNext()) {" + lf +
+				"                    wrappers[i++] = new " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "((" + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "Remote)it.next());" + lf +
+				"                    it.remove();" + lf +
+				"                }" + lf +
+				"                it = null;" + lf +
+				"                elements = null;" + lf +
+				"                return wrappers;" + lf +
+				"            }" + lf +
+				"        } catch(BeanHomeFactoryException bhfe) {" + lf +
+				"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
+				"            throw bhfe;" + lf +
+				"        } catch(FinderException fe) {" + lf +
+				"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
+				"            throw fe;" + lf +
+				"        } catch(RemoteException re) {" + lf +
+				"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
+				"            throw re;" + lf +
+				"        }" + lf +
+				"    }" + lf + lf
+			);
+
+		}
 		code.append("}" + lf);
 		return code.toString();
 	}
 
 	private String wraper_bean(EJB ejb)
 	{
+		FIELD field = null;
 		FIELD field_tmp = null;
-		String _pk_name = null;
-		String _pk_type = null;
-		for(int i=0; i<ejb.fields.size(); i++)
-		{
-			field_tmp = (FIELD)ejb.fields.elementAt(i);
-			if(field_tmp.pk)
-			{
-				_pk_name = field_tmp.name;
-				_pk_type = toJavaType(field_tmp.type);
-				break;
-			}
-		}
 
 		StringBuffer code = new StringBuffer();
+		code.append(getHeader(ejb) + lf);
+ 		code.append(" */" + lf);
 		code.append("package " + ejb.app_package + ";" + lf);
 		code.append(lf);
-		code.append( getHeader(ejb) + lf);
-		code.append(" * Implementation of " + ejb.app_package + "." + toSunClassName(ejb.name) + " (Wrapper for JavaBeans)" + lf);
-		code.append(" * " + lf);
-		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
- 		code.append(" * " + lf);
- 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
- 		code.append(" * " + lf);
- 		code.append(" * $Id$" + lf);
- 		code.append(" */" + lf);
- 		code.append(lf);
 		code.append("// Standard packages" + lf);
 		code.append("import java.rmi.RemoteException;" + lf);
 		code.append("  //add your needed standard packages here" + lf);
@@ -1324,30 +1777,48 @@ public class BeanGen
 		code.append("import ejb.impl.core.MandatoryFieldException;" + lf);
 		code.append("  //add your own packages here" + lf);
 		code.append(lf);
-		code.append("public class " + toSunClassName(ejb.name) + " {" + lf + lf);
+ 		code.append("/**" + lf);
+		code.append(" * Implementation of " + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "" + lf);
+		code.append(" * " + lf);
+		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
+ 		code.append(" * " + lf);
+ 		code.append(" * @since " + DOLLAR + "Id:" + DOLLAR + lf);
+		code.append(" * @author " + ejb.author + lf);
+ 		code.append(" */" + lf);
+ 		code.append(lf);
+		code.append("public class " + TextUtils.toSunClassName(ejb.name) + " {" + lf + lf);
 
 		code.append("    /**" + lf);
 		code.append("     * Internal reference to Remote Object" + lf);
 		code.append("     */" + lf);
-		code.append("    private " + toSunClassName(ejb.name) + "Remote ejb = null;" + lf + lf);
+		code.append("    private " + TextUtils.toSunClassName(ejb.name) + "Remote ejb = null;" + lf + lf);
 
 		// if we want lazy loading for fields lets make a 'local' copy inside this JavaBean
 		if(project.lazy.fields)
 		{
 			// Generate all the fields
-			for(int j=0; j<ejb.fields.size(); j++)
+			for(int i=0; i<ejb.fields.size(); i++)
 			{
-				field = (FIELD)ejb.fields.elementAt(j);
+				field = (FIELD)ejb.fields.elementAt(i);
 				code.append(
 					"    /**" + lf +
-					"     * Local copy of remote field  field " + toSunClassName(ejb.name) + "Remote." + toSunMethodName(field.name + (field.fk?"_id":"")) + " for Lazy Loading." + lf +
+					"     * Local copy of remote field  field " + TextUtils.toSunClassName(ejb.name) + "Remote." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " for Lazy Loading." + lf +
 					"     * This means that this bean will only load once this property until there's a update." + lf +
-					"     */" + lf +
-					"    private " + toNativeJavaType(toJavaType(field.type)) + " " + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + getInitialValueFor(toNativeJavaType(toJavaType(field.type))) + ";" + lf + lf +
+					"     */" + lf
+				);
+
+				if(field.nullable)
+					code.append("    private " + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = null;" + lf + lf);
+				else
+					code.append("    private " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.getInitialValueFor(TextUtils.toJavaFieldType(field.type)) + ";" + lf + lf);
+
+				code.append(
 					"    /**" + lf +
 					"     * dirty flag to inform that is needed some entity update for this field" + lf +
 					"     */" + lf +
-					"    private boolean " + toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = true;" + lf + lf
+					"    private boolean " + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = true;" + lf + lf
 				);
 			}
 		}
@@ -1355,9 +1826,9 @@ public class BeanGen
 		// if we want lazy FK
 		if(project.lazy.fks)
 		{
-			for(int j=0; j<ejb.fields.size(); j++)
+			for(int i=0; i<ejb.fields.size(); i++)
 			{
-				field = (FIELD)ejb.fields.elementAt(j);
+				field = (FIELD)ejb.fields.elementAt(i);
 				if(field.fk)
 				{
 					String fk_tmp_name = null;
@@ -1367,12 +1838,12 @@ public class BeanGen
 					boolean found = false;
 
 					// find where the reference to this fk
-					for(int k=0; k<ejbs.size(); k++)
+					for(int j=0; j<ejbs.size(); j++)
 					{
-						ejb_tmp = (EJB)ejbs.elementAt(k);
-						for(int a=0; a<ejb_tmp.fields.size(); a++)
+						ejb_tmp = (EJB)ejbs.elementAt(j);
+						for(int k=0; k<ejb_tmp.fields.size(); k++)
 						{
-							field_tmp = (FIELD)ejb_tmp.fields.elementAt(a);
+							field_tmp = (FIELD)ejb_tmp.fields.elementAt(k);
 							if(field_tmp.pk && field_tmp.db_name.equals(field.db_name))
 							{
 								fk_tmp_package = ejb_tmp.app_package;
@@ -1385,27 +1856,21 @@ public class BeanGen
 					}
 					if(fk_tmp_name == null)
 					{
-						if(field.db_alias.size() > 0)
+						if(!"".equals(field.db_alias))
 						{
 							found = false;
-							String alias = null;
-							for(int g=0;g<field.db_alias.size(); g++)
+							// find where the reference to this fk
+							for(int a=0; a<ejbs.size(); a++)
 							{
-								alias = (String)field.db_alias.elementAt(g);
-								// find where the reference to this fk
-								for(int k=0; k<ejbs.size(); k++)
+								ejb_tmp = (EJB)ejbs.elementAt(a);
+								for(int b=0; b<ejb_tmp.fields.size(); b++)
 								{
-									ejb_tmp = (EJB)ejbs.elementAt(k);
-									for(int a=0; a<ejb_tmp.fields.size(); a++)
+									field_tmp = (FIELD)ejb_tmp.fields.elementAt(b);
+									if(field_tmp.pk && field_tmp.db_name.equals(field.db_alias))
 									{
-										field_tmp = (FIELD)ejb_tmp.fields.elementAt(a);
-										if(field_tmp.pk && field_tmp.db_name.equals(alias))
-										{
-											fk_tmp_package = ejb_tmp.app_package;
-											fk_tmp_name = ejb_tmp.name;
-											found = true;
-										}
-										if(found) break;
+										fk_tmp_package = ejb_tmp.app_package;
+										fk_tmp_name = ejb_tmp.name;
+										found = true;
 									}
 									if(found) break;
 								}
@@ -1419,14 +1884,14 @@ public class BeanGen
 					}
 					code.append(
 						"    /**" + lf +
-						"     * Local copy of remote field  field " + toSunClassName(ejb.name) + "Remote." + toSunMethodName(field.name) + " for Lazy Loading." + lf +
+						"     * Local copy of remote field  field " + TextUtils.toSunClassName(ejb.name) + "Remote." + TextUtils.toSunMethodName(field.name) + " for Lazy Loading." + lf +
 						"     * This means that this bean will only load once this property until there's a update." + lf +
 						"     */" + lf +
-						"    private " + fk_tmp_package + "." + toSunClassName(fk_tmp_name) + " " + toSunMethodName(field.name) + " = null;" + lf + lf +
+						"    private " + fk_tmp_package + "." + TextUtils.toSunClassName(fk_tmp_name) + " " + TextUtils.toSunMethodName(field.name) + " = null;" + lf + lf +
 						"    /**" + lf +
 						"     * dirty flag to inform that is needed some entity update for this field" + lf +
 						"     */" + lf +
-						"    private boolean " + toSunMethodName(field.name) + "_dirty = true;" + lf + lf
+						"    private boolean " + TextUtils.toSunMethodName(field.name) + "_dirty = true;" + lf + lf
 					);
 				}
 			}
@@ -1443,6 +1908,7 @@ public class BeanGen
 			{
 				pk_package = null;
 				col_tmp = (COLLECTION)ejb.collections.elementAt(j);
+
 				for(int k=0;k<ejbs.size(); k++)
 				{
 					ejb_tmp = (EJB)ejbs.elementAt(k);
@@ -1455,14 +1921,14 @@ public class BeanGen
 
 				code.append(
 					"    /**" + lf +
-					"     * Local copy of remote Collection of " + toSunClassName(col_tmp.obj_name)  + "Remote for Lazy Loading." + lf +
+					"     * Local copy of remote Collection of " + TextUtils.toSunClassName(col_tmp.obj_name)  + "Remote for Lazy Loading." + lf +
 					"     * This means that this bean will only load once this property until there's a update." + lf +
 					"     */" + lf +
-					"    private " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "[] " + toSunMethodName(toPlural(col_tmp.obj_name)) + " = null;" + lf + lf +
+					"    private " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "[] " + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + " = null;" + lf + lf +
 					"    /**" + lf +
 					"     * dirty flag to inform that is needed some entity update for this field" + lf +
 					"     */" + lf +
-					"    private boolean " + toSunMethodName(toPlural(col_tmp.obj_name)) + "_dirty = true;" + lf + lf
+					"    private boolean " + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + "_dirty = true;" + lf + lf
 				);
 			}
 		}
@@ -1476,54 +1942,59 @@ public class BeanGen
 			if(!field.ro)
 			{
 				code.append("    /**" + lf);
-	 			code.append("     * Setter for field " + toSunClassName(ejb.name) + "Remote." + toSunMethodName(field.name + (field.fk?"_id":"")) + lf);
-	 			code.append("     * @param " + toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
+	 			code.append("     * Setter for field " + TextUtils.toSunClassName(ejb.name) + "Remote." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + lf);
+	 			code.append("     * @param " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " the new value for this field" + lf);
 				code.append("     */" + lf);
-				code.append("    public void " + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + toNativeJavaType(toJavaType(field.type)) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable?"":", MandatoryFieldException") + " {" + lf);
+
+				if(field.nullable)
+					code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable==true?"":", MandatoryFieldException") + " {" + lf);
+				else
+					code.append("    public void " + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ") throws RemoteException" + (field.nullable==true?"":", MandatoryFieldException") + " {" + lf);
+
 				code.append("        try {" + lf);
 
 				if(project.lazy.fields)
 				{
-					code.append("            if(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty) {" + lf);
-					code.append("                " + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "();" + lf);
+					code.append("            if(this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty) {" + lf);
+					code.append("                " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "();" + lf);
 					code.append("            }" + lf);
 
 					if(field.nullable)
 		 			{
-		 				if(!isNative(toNativeJavaType(toJavaType(field.type))))
+		 				if(!TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
 		 				{
 							code.append("            // both internal and new fields are null, leave it as it is..." + lf);
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == null && this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " == null) return;" + lf);
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " == null && this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " == null) return;" + lf);
 						}
 						code.append("            // both internal and new fields are equal, leave it as it is..." + lf);
-						if(isNative(toNativeJavaType(toJavaType(field.type))))
+						if(TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
 						{
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ") return;" + lf);
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " == this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ") return;" + lf);
 						}
 						else
 						{
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " != null && " + toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " != null && " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
 						}
-						code.append("            this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
+						code.append("            this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
 					}
 		 			else
 					{
-						if(!isNative(toNativeJavaType(toJavaType(field.type))))
+						if(!TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
 						{
 							code.append("            // since the db field can't be null we won't allow you to set it null..." + lf);
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == null) throw new MandatoryFieldException(\"'" + toSunParameterName(field.name + (field.fk?"_id":"")) + "' can't be null.\");" + lf);
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " == null) throw new MandatoryFieldException(\"'" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + "' can't be null.\");" + lf);
 						}
 						code.append("            // both internal and new fields are equal, leave it as it is..." + lf);
-						if(isNative(toNativeJavaType(toJavaType(field.type))))
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + " == this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ") return;" + lf);
+						if(TextUtils.isNative(TextUtils.toJavaFieldType(field.type)))
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + " == this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ") return;" + lf);
 						else
-							code.append("            if(" + toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
-						code.append("            this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
+							code.append("            if(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ".equals(this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ")) return;" + lf);
+						code.append("            this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ";" + lf);
 		 			}
 				}
-				code.append("            ejb." + toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + getJavaObjectConstructorForNative(toNativeJavaType(toJavaType(field.type)), toSunParameterName(field.name + (field.fk?"_id":""))) + ");" + lf);
+				code.append("            ejb." + TextUtils.toSunMethodName("set_" + field.name + (field.fk?"_id":"")) + "(" + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + ");" + lf);
 				if(project.lazy.fields)
-					code.append("            this." + toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = false;" + lf);
+					code.append("            this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = false;" + lf);
 				code.append("        } catch(RemoteException re) {" + lf);
 				code.append("            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf);
 				code.append("            throw re;" + lf);
@@ -1540,22 +2011,26 @@ public class BeanGen
 		{
 			field = (FIELD)ejb.fields.elementAt(j);
 			code.append("    /**" + lf);
-			code.append("     * Getter for field " + toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
+			code.append("     * Getter for field " + TextUtils.toSunParameterName(field.name + (field.fk?"_id":"")) + lf);
 			code.append("     * @return the value for the field" + lf);
 			code.append("     */" + lf);
-			code.append("    public " + toNativeJavaType(toJavaType(field.type)) + " " + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException {" + lf);
+
+			if(field.nullable)
+				code.append("    public " + TextUtils.toJavaObjectFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException {" + lf);
+			else
+				code.append("    public " + TextUtils.toJavaFieldType(field.type) + " " + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "() throws RemoteException {" + lf);
 			code.append("        try {" + lf);
 			if(project.lazy.fields)
 			{
-				code.append("            if(this." + toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty) {" + lf);
-				code.append("                this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = ejb." + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "()" + getJavaNativeFromObject(toJavaType(field.type)) + ";" + lf);
-				code.append("                this." + toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = false;" + lf);
+				code.append("            if(this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty) {" + lf);
+				code.append("                this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = ejb." + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "();" + lf);
+				code.append("                this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + "_dirty = false;" + lf);
 				code.append("            }" + lf);
-				code.append("            return this." + toSunMethodName(field.name + (field.fk?"_id":"")) + ";" + lf);
+				code.append("            return this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + ";" + lf);
 			}
 			else
 			{
-				code.append("            return ejb." + toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "()" + getJavaNativeFromObject(toJavaType(field.type)) + ";" + lf);
+				code.append("            return ejb." + TextUtils.toSunMethodName("get_" + field.name + (field.fk?"_id":"")) + "()" + TextUtils.toJavaFieldType(field.type) + ";" + lf);
 			}
 			code.append("        } catch(RemoteException re) {" + lf);
 			code.append("            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf);
@@ -1592,6 +2067,7 @@ public class BeanGen
 				String fk_tmp_name = null;
 				String fk_tmp_package = null;
 				String fk_tmp_pk = null;
+				String fk_tmp_type = null;
 				boolean found = false;
 
 				// find where the reference to this fk
@@ -1602,7 +2078,10 @@ public class BeanGen
 					{
 						field_tmp = (FIELD)ejb_tmp.fields.elementAt(a);
 						if(field_tmp.pk)
+						{
 							fk_tmp_pk = field_tmp.name;
+							fk_tmp_type = field_tmp.type;
+						}
 						if(field_tmp.pk && field_tmp.db_name.equals(field.db_name))
 						{
 							fk_tmp_package = ejb_tmp.app_package;
@@ -1615,27 +2094,21 @@ public class BeanGen
 				}
 				if(fk_tmp_name == null)
 				{
-					if(field.db_alias.size() > 0)
+					if(!"".equals(field.db_alias))
 					{
 						found = false;
-						String alias = null;
-						for(int g=0;g<field.db_alias.size(); g++)
+						// find where the reference to this fk
+						for(int k=0; k<ejbs.size(); k++)
 						{
-							alias = (String)field.db_alias.elementAt(g);
-							// find where the reference to this fk
-							for(int k=0; k<ejbs.size(); k++)
+							ejb_tmp = (EJB)ejbs.elementAt(k);
+							for(int a=0; a<ejb_tmp.fields.size(); a++)
 							{
-								ejb_tmp = (EJB)ejbs.elementAt(k);
-								for(int a=0; a<ejb_tmp.fields.size(); a++)
+								field_tmp = (FIELD)ejb_tmp.fields.elementAt(a);
+								if(field_tmp.pk && field_tmp.db_name.equals(field.db_alias))
 								{
-									field_tmp = (FIELD)ejb_tmp.fields.elementAt(a);
-									if(field_tmp.pk && field_tmp.db_name.equals(alias))
-									{
-										fk_tmp_package = ejb_tmp.app_package;
-										fk_tmp_name = ejb_tmp.name;
-										found = true;
-									}
-									if(found) break;
+									fk_tmp_package = ejb_tmp.app_package;
+									fk_tmp_name = ejb_tmp.name;
+									found = true;
 								}
 								if(found) break;
 							}
@@ -1649,26 +2122,36 @@ public class BeanGen
 				}
 				code.append(
 					"    /**" + lf +
-					"     * Returns the foreign key for " + toSunClassName(ejb.name) + "Remote." + toSunMethodName(field.name) + lf +
+					"     * Returns the foreign key for " + TextUtils.toSunClassName(ejb.name) + "Remote." + TextUtils.toSunMethodName(field.name) + lf +
 					"     * @return A wrapper object for the foreign key" + lf +
 					"     */" + lf +
-					"    public " + fk_tmp_package + "." + toSunClassName(fk_tmp_name) + " " + toSunMethodName("get_" + toSunClassName(fk_tmp_name)) + "() throws BeanHomeFactoryException, RemoteException, FinderException {" + lf +
+					"    public " + fk_tmp_package + "." + TextUtils.toSunClassName(fk_tmp_name) + " " + TextUtils.toSunMethodName("get_" + field.name) + "() throws BeanHomeFactoryException, RemoteException, FinderException {" + lf +
 					"        try {" + lf
 				);
 				if(project.lazy.fks)
 				{
+					code.append("            if(this." + TextUtils.toSunMethodName(field.name) + "_dirty) {" + lf);
+					if(field.nullable)
+					{
+						code.append("                if(this." + TextUtils.toSunMethodName("get_" + field.name + "_id") + "() == null) {" + lf);
+						code.append("                    this." + TextUtils.toSunMethodName(field.name) + " = null;" + lf);
+						code.append("                } else {" + lf);
+						code.append("                    this." + TextUtils.toSunMethodName(field.name) + " = " + TextUtils.toSunClassName(fk_tmp_name) + "Manager.findByPrimaryKey(this." + TextUtils.toSunMethodName("get_" + field.name + "_id") + "()" + TextUtils.getJavaNativeFromObject(TextUtils.toJavaObjectFieldType(fk_tmp_type)) + ");" + lf);
+						code.append("                }" + lf);
+					}
+					else
+						code.append("                this." + TextUtils.toSunMethodName(field.name) + " = " + TextUtils.toSunClassName(fk_tmp_name) + "Manager.findByPrimaryKey(this." + TextUtils.toSunMethodName("get_" + field.name + "_id") + "());" + lf);
+
 					code.append(
-						"            if(this." + toSunMethodName(field.name) + "_dirty) {" + lf +
-						"                this." + toSunMethodName(field.name) + " = " + toSunClassName(fk_tmp_name) + "Manager.findByPrimaryKey(this." + toSunMethodName("get_" + field.name + "_id") + "());" + lf +
-						"                this." + toSunMethodName(field.name) + "_dirty = false;" + lf +
+						"                this." + TextUtils.toSunMethodName(field.name) + "_dirty = false;" + lf +
 						"            }" + lf +
-						"            return this." + toSunMethodName(field.name) + ";" + lf
+						"            return this." + TextUtils.toSunMethodName(field.name) + ";" + lf
 					);
 				}
 				else
 				{
 					code.append(
-						"            return " + toSunClassName(fk_tmp_name) + "Manager.findByPrimaryKey(this." + toSunMethodName("get_" + field.name + "_id") + "());" + lf
+						"            return " + TextUtils.toSunClassName(fk_tmp_name) + "Manager.findByPrimaryKey(this." + TextUtils.toSunMethodName("get_" + field.name + "_id") + "());" + lf
 					);
 				}
 				code.append(
@@ -1688,11 +2171,28 @@ public class BeanGen
 				code.append(
 					"    /**" + lf +
 					"     * Set's the internal field value with the FK Wrapper id" + lf +
-					"     * @param A wrapper object to be the new foreign key" + lf +
+					"     * @param wrapper A wrapper object to be the new foreign key" + lf +
 					"     */" + lf +
-					"    public void " + toSunMethodName("set_" + toSunClassName(fk_tmp_name)) + "(" + fk_tmp_package + "." + toSunClassName(fk_tmp_name) + " wrapper) throws RemoteException {" + lf +
-					"        try {" + lf +
-					"            this." + toSunMethodName("set_" + field.name + "_id") + "(wrapper." + toSunMethodName("get_" + fk_tmp_pk) + "());" + lf +
+					"    public void " + TextUtils.toSunMethodName("set_" + field.name) + "(" + fk_tmp_package + "." + TextUtils.toSunClassName(fk_tmp_name) + " wrapper) throws " + (field.nullable==true?"":"MandatoryFieldException, ") + "RemoteException {" + lf +
+					"        try {" + lf
+				);
+				if(field.nullable)
+				{
+					code.append("            if(wrapper == null) this." + TextUtils.toSunMethodName("set_" + field.name + "_id") + "(null);" + lf);
+					code.append("            else this." + TextUtils.toSunMethodName("set_" + field.name + "_id") + "(" + TextUtils.getJavaObjectConstructorForNative(TextUtils.toJavaFieldType(fk_tmp_type), "wrapper." + TextUtils.toSunMethodName("get_" + fk_tmp_pk) + "()") + ");" + lf);
+				}
+				else
+					code.append("            this." + TextUtils.toSunMethodName("set_" + field.name + "_id") + "(wrapper." + TextUtils.toSunMethodName("get_" + fk_tmp_pk) + "());" + lf);
+
+				if(!field.nullable)
+				{
+					code.append(
+						"        } catch(MandatoryFieldException mfe) {" + lf +
+						"            Trace.errln(\"MandatoryFieldException - \" + mfe.getMessage(), Trace.SEVERE, true);" + lf +
+						"            throw mfe;" + lf
+					);
+				}
+				code.append(
 					"        } catch(RemoteException re) {" + lf +
 					"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
 					"            throw re;" + lf +
@@ -1719,41 +2219,41 @@ public class BeanGen
 
 			code.append(
 				"    /**" + lf +
-				"     * Local copy of remote Collection of " + toSunClassName(col_tmp.obj_name)  + "Remote for Lazy Loading." + lf +
+				"     * Local copy of remote Collection of " + TextUtils.toSunClassName(col_tmp.obj_name)  + "Remote for Lazy Loading." + lf +
 				"     * This means that this bean will only load once this property until there's a update." + lf +
 				"     */" + lf +
-				"    public " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "[] " + toSunMethodName("get_" + toSunMethodName(toPlural(col_tmp.obj_name))) + "() throws BeanHomeFactoryException, RemoteException, FinderException {" + lf +
+				"    public " + pk_package + "." + TextUtils.toSunClassName(col_tmp.obj_name) + "[] " + TextUtils.toSunMethodName("get_" + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias()))) + "() throws BeanHomeFactoryException, RemoteException, FinderException {" + lf +
 				"        try {" + lf
 			);
 			if(project.lazy.collections)
 			{
 				code.append(
-					"            if(this." + toSunMethodName(toPlural(col_tmp.obj_name)) + "_dirty) {" + lf
+					"            if(this." + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + "_dirty) {" + lf
 				);
 
-				if(!isNative(_pk_type))
+				if(!TextUtils.isNative(TextUtils.toJavaFieldType(ejb.getPkType())))
 				{
-					code.append("                this." + toSunMethodName(toPlural(col_tmp.obj_name)) + " = " + toSunClassName(ejb.name) + "Manager." + toSunMethodName("get_" + toPlural(col_tmp.obj_name)) + "(" + getJavaObjectConstructorForNative(toNativeJavaType(_pk_type), " this." + toSunMethodName("get_" + _pk_name) + "()") + ");" + lf);
+					code.append("                this." + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + " = " + TextUtils.toSunClassName(ejb.name) + "Manager." + TextUtils.toSunMethodName("get_" + TextUtils.toPlural(col_tmp.getAlias())) + "(" + TextUtils.getJavaObjectConstructorForNative(TextUtils.toJavaFieldType(TextUtils.toJavaFieldType(ejb.getPkType())), " this." + TextUtils.toSunMethodName("get_" + ejb.getPkName()) + "()") + ");" + lf);
 				}
 				else
 				{
-					code.append("                this." + toSunMethodName(toPlural(col_tmp.obj_name)) + " = " + toSunClassName(ejb.name) + "Manager." + toSunMethodName("get_" + toPlural(col_tmp.obj_name)) + "(this." + toSunMethodName("get_" + _pk_name) + "());" + lf);
+					code.append("                this." + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + " = " + TextUtils.toSunClassName(ejb.name) + "Manager." + TextUtils.toSunMethodName("get_" + TextUtils.toPlural(col_tmp.getAlias())) + "(this." + TextUtils.toSunMethodName("get_" + ejb.getPkName()) + "());" + lf);
 				}
 				code.append(
-					"                this." + toSunMethodName(toPlural(col_tmp.obj_name)) + "_dirty = false;" + lf +
+					"                this." + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + "_dirty = false;" + lf +
 					"            }" + lf +
-					"            return this." + toSunMethodName(toPlural(col_tmp.obj_name)) + ";" + lf
+					"            return this." + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + ";" + lf
 				);
 			}
 			else
 			{
-				if(!isNative(_pk_type))
+				if(!TextUtils.isNative(TextUtils.toJavaFieldType(ejb.getPkType())))
 				{
-					code.append("                return " + toSunClassName(ejb.name) + "Manager." + toSunMethodName("get_" + toPlural(col_tmp.obj_name)) + "(" + getJavaObjectConstructorForNative(toNativeJavaType(_pk_type), " this." + toSunMethodName("get_" + _pk_name) + "()") + ");" + lf);
+					code.append("                return " + TextUtils.toSunClassName(ejb.name) + "Manager." + TextUtils.toSunMethodName("get_" + TextUtils.toPlural(col_tmp.getAlias())) + "(" + TextUtils.getJavaObjectConstructorForNative(TextUtils.toJavaFieldType(ejb.getPkType()), " this." + TextUtils.toSunMethodName("get_" + ejb.getPkName()) + "()") + ");" + lf);
 				}
 				else
 				{
-					code.append("                return " + toSunClassName(ejb.name) + "Manager." + toSunMethodName("get_" + toPlural(col_tmp.obj_name)) + "(this." + toSunMethodName("get_" + _pk_name) + "());" + lf);
+					code.append("                return " + TextUtils.toSunClassName(ejb.name) + "Manager." + TextUtils.toSunMethodName("get_" + TextUtils.toPlural(col_tmp.getAlias())) + "(this." + TextUtils.toSunMethodName("get_" + ejb.getPkName()) + "());" + lf);
 				}
 			}
 			code.append(
@@ -1776,7 +2276,7 @@ public class BeanGen
 		code.append("     * this constructor will be called by the Bean Manager" + lf);
 		code.append("     *" + lf);
 		code.append("     */" + lf);
-		code.append("    protected " + toSunClassName(ejb.name) + "(" + toSunClassName(ejb.name) + "Remote ejb) {" + lf);
+		code.append("    protected " + TextUtils.toSunClassName(ejb.name) + "(" + TextUtils.toSunClassName(ejb.name) + "Remote ejb) {" + lf);
 		code.append("        this.ejb = ejb;" + lf);
 		code.append("    }" + lf + lf);
 
@@ -1794,9 +2294,10 @@ public class BeanGen
 			for(int j=0; j<ejb.fields.size(); j++)
 			{
 				field = (FIELD)ejb.fields.elementAt(j);
-				code.append(
-					"        this." + toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + getInitialValueFor(toNativeJavaType(toJavaType(field.type))) + ";" + lf
-				);
+				if(field.nullable)
+					code.append("        this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = null;" + lf);
+				else
+					code.append("        this." + TextUtils.toSunMethodName(field.name + (field.fk?"_id":"")) + " = " + TextUtils.getInitialValueFor(TextUtils.toJavaFieldType(field.type)) + ";" + lf);
 			}
 		}
 
@@ -1810,7 +2311,7 @@ public class BeanGen
 				if(field.fk)
 				{
 					code.append(
-						"        this." + toSunMethodName(field.name) + " = null;" + lf
+						"        this." + TextUtils.toSunMethodName(field.name) + " = null;" + lf
 					);
 				}
 			}
@@ -1834,13 +2335,13 @@ public class BeanGen
 				}
 
 				code.append(
-				    "    // ensure that there's no reference in memory so garbage collector reduces memory usage" + lf +
-					"    if(" + toSunMethodName(toPlural(col_tmp.obj_name)) + " != null) {" + lf +
-					"        for(int i=0; i<" + toSunMethodName(toPlural(col_tmp.obj_name)) + ".length; i++) {" + lf +
-					"            " + toSunMethodName(toPlural(col_tmp.obj_name)) + "[i] = null;" + lf +
+				    "        // ensure that there's no reference in memory so garbage collector reduces memory usage" + lf +
+					"        if(" + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + " != null) {" + lf +
+					"            for(int i=0; i<" + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + ".length; i++) {" + lf +
+					"                " + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + "[i] = null;" + lf +
+					"            }" + lf +
 					"        }" + lf +
-					"    }" + lf +
-					"    " + toSunMethodName(toPlural(col_tmp.obj_name)) + " = null;" + lf
+					"        " + TextUtils.toSunMethodName(TextUtils.toPlural(col_tmp.getAlias())) + " = null;" + lf
 				);
 			}
 		}
@@ -1851,481 +2352,65 @@ public class BeanGen
 		return code.toString();
 	}
 
-	private String manager_bean(EJB ejb)
-	{
-		StringBuffer code = new StringBuffer();
-		code.append("package " + ejb.app_package + ";" + lf);
-		code.append(lf);
-		code.append( getHeader(ejb) + lf);
-		code.append(" * Implementation of " + ejb.app_package + "." + toSunClassName(ejb.name) + "Manager for Wrapper beans" + lf);
-		code.append(" * " + lf);
-		code.append(" * " + ejb.description.replaceAll(lf, lf + " * ") + lf);
- 		code.append(" * " + lf);
- 		code.append(" * Generated by BeanGen " + this.VERSION + lf);
- 		code.append(" * " + lf);
- 		code.append(" * $Id$" + lf);
- 		code.append(" */" + lf);
- 		code.append(lf);
-		code.append("// Standard packages" + lf);
-		code.append("import java.util.Collection;" + lf);
-		code.append("import java.util.Iterator;" + lf);
-		code.append("import java.rmi.RemoteException;" + lf);
-		code.append("  //add your needed standard packages here" + lf);
-		code.append(lf);
-		code.append("// Extension packages" + lf);
-		code.append("import javax.ejb.CreateException;" + lf);
-		code.append("import javax.ejb.FinderException;" + lf);
-		code.append("import ejb.impl.util.Trace;" + lf);
-		code.append("import ejb.impl.util.BeanHomeFactory;" + lf);
-		code.append("import ejb.impl.util.BeanHomeFactoryException;" + lf);
-		code.append("  //add your own packages here" + lf);
-		code.append(lf);
-		code.append("public class " + toSunClassName(ejb.name) + "Manager {" + lf + lf);
-
-		code.append("    /**" + lf);
-		code.append("     * Reference to a Home interface factory" + lf);
-		code.append("     */" + lf);
-		code.append("    private static BeanHomeFactory factory = null;" + lf + lf);
-
-		// define the constructor
-		code.append(
-			"    /**" + lf +
-			"     * Bean Manager Static initializer" + lf +
-			"     */" + lf +
-			"    private static void init() throws BeanHomeFactoryException {" + lf +
-			"        try {" + lf +
-			"            factory = BeanHomeFactory.getFactory();" + lf +
-			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
-			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw bhfe;" + lf +
-			"        }" + lf +
-			"    }" + lf + lf
-		);
-
-		// define the create method
-		String pk_type = null;
-		for(int j=0; j<ejb.fields.size(); j++)
-		{
-			if(((FIELD)ejb.fields.elementAt(j)).pk)
-			{
-				pk_type = ((FIELD)ejb.fields.elementAt(j)).type;
-				break;
-			}
-		}
-
-		// get all not null fields and force them into the create method
-		StringBuffer native_create_params = new StringBuffer();
-		StringBuffer ejb_create_params = new StringBuffer();
-
-		for(int j=0; j<ejb.fields.size(); j++)
-		{
-			field = (FIELD)ejb.fields.elementAt(j);
-			if(!field.nullable && !field.pk)
-			{
-				native_create_params.append( toNativeJavaType(toJavaType(field.type)) + " " + toSunParameterName(field.name + (field.fk?"_id":"")) + ", ");
-				ejb_create_params.append( getJavaObjectConstructorForNative(toNativeJavaType(toJavaType(field.type)), toSunParameterName(field.name + (field.fk?"_id":""))) + ", ");
-			}
-		}
-
-		if(native_create_params.length() > 0)
-		{
-			native_create_params.setLength( native_create_params.length() - 2 );
-			ejb_create_params.setLength( ejb_create_params.length() - 2 );
-		}
-
-		code.append("    /**" + lf);
-		code.append("     * Creates a proxy object for " + toSunClassName(ejb.name) + lf);
-		code.append("     * " + lf);
-		for(int j=0; j<ejb.fields.size(); j++)
-		{
-			field = (FIELD)ejb.fields.elementAt(j);
-			if(!field.nullable && !field.pk)
-				code.append("     * @param " + toSunParameterName(field.name) + (field.fk?"Id":"") + " " + lf);
-		}
-		code.append("     * @return Wrapper instance for a " + toSunClassName(ejb.name) + " proxy" + lf);
-		code.append("     */" + lf);
-		code.append(
-			"    public static synchronized " + toSunClassName(ejb.name) + " create(" + native_create_params.toString() + ") throws BeanHomeFactoryException, CreateException, RemoteException {" + lf +
-			"        try {" + lf +
-			"            if(factory == null) init();" + lf +
-			"            " + ejb.app_package + "." + toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\");" + lf +
-			"            return new " + toSunClassName(ejb.name) + "(home.create(" + ejb_create_params.toString() + "));" + lf +
-			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
-			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw bhfe;" + lf +
-			"        } catch(CreateException ce) {" + lf +
-			"            Trace.errln(\"CreateException - \" + ce.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw ce;" + lf +
-			"        } catch(RemoteException re) {" + lf +
-			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw re;" + lf +
-			"        }" + lf +
-			"    }" + lf + lf
-		);
-
-		code.append("    /**" + lf);
-		code.append("     * Finds an entry in the storage for your entities " + toSunClassName(ejb.name) + lf);
-		code.append("     * " + lf);
-		code.append("     * @param key Primary Key that identifies the entry" + lf);
-		code.append("     * @return Wrapper for " + toSunClassName(ejb.name) + "Remote" + lf);
-		code.append("     */" + lf);
-		code.append(
-			"    public static synchronized " + toSunClassName(ejb.name) + " findByPrimaryKey(" + toNativeJavaType(toJavaType(pk_type)) + " key) throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
-			"        try {" + lf +
-			"            if(factory == null) init();" + lf +
-			"            " + ejb.app_package + "." + toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\");" + lf +
-			"            return new " + toSunClassName(ejb.name) + "(home.findByPrimaryKey(" + getJavaObjectConstructorForNative(toNativeJavaType(toJavaType(pk_type)), "key") + "));" + lf +
-			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
-			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw bhfe;" + lf +
-			"        } catch(FinderException fe) {" + lf +
-			"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw fe;" + lf +
-			"        } catch(RemoteException re) {" + lf +
-			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw re;" + lf +
-			"        }" + lf +
-			"    }" + lf + lf
-		);
-
-		code.append("    /**" + lf);
-		code.append("     * Finds all entries in the storage for your entities " + toSunClassName(ejb.name) + lf);
-		code.append("     * " + lf);
-		code.append("     * @return Wrapper for " + toSunClassName(ejb.name) + "Remote" + lf);
-		code.append("     */" + lf);
-		code.append(
-			"    public static synchronized " + toSunClassName(ejb.name) + "[] findAll() throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
-			"        try {" + lf +
-			"            if(factory == null) init();" + lf +
-			"            " + ejb.app_package + "." + toSunClassName(ejb.name) + "Home home = (" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home)factory.getHome(" + ejb.app_package + "." + toSunClassName(ejb.name) + "Home.class, \"java:comp/env/ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\");" + lf +
-			"            Collection elements = home.findAll();" + lf +
-			"            if(elements == null)" + lf +
-			"                return null;" + lf +
-			"            else" + lf +
-			"            {" + lf +
-			"                " + toSunClassName(ejb.name) + "[] wrappers = new " + toSunClassName(ejb.name) + "[elements.size()];" + lf +
-			"                Iterator it = elements.iterator();" + lf +
-			"                int i = 0;" + lf +
-			"                while(it.hasNext()) {" + lf +
-			"                    wrappers[i++] = new " + toSunClassName(ejb.name) + "((" + toSunClassName(ejb.name) + "Remote)it.next());" + lf +
-			"                    it.remove();" + lf +
-			"                }" + lf +
-			"                it = null;" + lf +
-			"                elements = null;" + lf +
-			"                return wrappers;" + lf +
-			"            }" + lf +
-			"        } catch(BeanHomeFactoryException bhfe) {" + lf +
-			"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw bhfe;" + lf +
-			"        } catch(FinderException fe) {" + lf +
-			"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw fe;" + lf +
-			"        } catch(RemoteException re) {" + lf +
-			"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
-			"            throw re;" + lf +
-			"        }" + lf +
-			"    }" + lf + lf
-		);
-
-		COLLECTION col_tmp = null;
-		FIELD field_tmp = null;
-		EJB ejb_tmp = null;
-		String pk_package = null;
-		boolean found = false;
-
-		// find collections for other objects
-		for(int i=0; i<ejb.collections.size(); i++)
-		{
-			pk_package = null;
-			col_tmp = (COLLECTION)ejb.collections.elementAt(i);
-			for(int k=0;k<ejbs.size(); k++)
-			{
-				ejb_tmp = (EJB)ejbs.elementAt(k);
-				if(col_tmp.obj_name.equals(ejb_tmp.name))
-				{
-					pk_package = ejb_tmp.app_package;
-					for(int j=0; j<ejb_tmp.fields.size(); j++)
-					{
-						field_tmp = (FIELD)ejb_tmp.fields.elementAt(j);
-						if(field_tmp.pk)
-						{
-							pk_type = toJavaType(field_tmp.type);
-							found = true;
-							if(found) break;
-						}
-					}
-					if(found) break;
-				}
-			}
-
-			found = false;
-			code.append("    /**" + lf);
-			code.append("     * Finds all entries in the storage for your entities " + toSunClassName(ejb.name) + lf);
-			code.append("     * " + lf);
-			code.append("     * @return Wrapper for " + toSunClassName(col_tmp.obj_name) + "Remote" + lf);
-			code.append("     */" + lf);
-			code.append(
-				"    public static synchronized " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "[] " + toSunMethodName("get_" + toPlural(toSunClassName(col_tmp.obj_name))) + "(" + pk_type + " key) throws BeanHomeFactoryException, FinderException, RemoteException {" + lf +
-				"        try {" + lf +
-				"            if(factory == null) init();" + lf +
-				"            " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "Home home = (" + pk_package + "." + toSunClassName(col_tmp.obj_name) + "Home)factory.getHome(" + pk_package + "." + toSunClassName(col_tmp.obj_name) + "Home.class, \"java:comp/env/ejb/" + (ejb_tmp.jndi_basepath==null?"":(ejb_tmp.jndi_basepath + "/")) + toSunClassName(ejb_tmp.name) + "\");" + lf +
-				"            Collection elements = home.findBy" + toSunClassName(ejb.name) + "(key);" + lf +
-				"            if(elements == null)" + lf +
-				"                return null;" + lf +
-				"            else" + lf +
-				"            {" + lf +
-				"                " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "[] wrappers = new " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "[elements.size()];" + lf +
-				"                Iterator it = elements.iterator();" + lf +
-				"                int i = 0;" + lf +
-				"                while(it.hasNext()) {" + lf +
-				"                    wrappers[i++] = new " + pk_package + "." + toSunClassName(col_tmp.obj_name) + "((" + pk_package + "." + toSunClassName(col_tmp.obj_name) + "Remote)it.next());" + lf +
-				"                    it.remove();" + lf +
-				"                }" + lf +
-				"                it = null;" + lf +
-				"                elements = null;" + lf +
-				"                return wrappers;" + lf +
-				"            }" + lf +
-				"        } catch(BeanHomeFactoryException bhfe) {" + lf +
-				"            Trace.errln(\"BeanHomeFactoryException - \" + bhfe.getMessage(), Trace.SEVERE, true);" + lf +
-				"            throw bhfe;" + lf +
-				"        } catch(FinderException fe) {" + lf +
-				"            Trace.errln(\"FinderException - \" + fe.getMessage(), Trace.SEVERE, true);" + lf +
-				"            throw fe;" + lf +
-				"        } catch(RemoteException re) {" + lf +
-				"            Trace.errln(\"RemoteException - \" + re.getMessage(), Trace.SEVERE, true);" + lf +
-				"            throw re;" + lf +
-				"        }" + lf +
-				"    }" + lf + lf
-			);
-
-		}
-		code.append("}" + lf);
-		return code.toString();
-	}
-
 	private String test_jsp(EJB ejb)
 	{
 		StringBuffer code = new StringBuffer();
 
-		code.append("<%@ page import=\"" + ejb.app_package + "." + toSunClassName(ejb.name) + "," + lf);
-		code.append("    " + ejb.app_package + "." + toSunClassName(ejb.name) + "Home," + lf);
-		code.append("    ejb.impl.util.BeanHomeFactory," + lf);
-		code.append("    ejb.impl.util.BeanHomeFactoryException\"%>" + lf + lf);
+		code.append("<%@ page import=\"" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "\"%>" + lf + lf);
+		code.append("<jsp:useBean id=\"" + TextUtils.toSunParameterName(ejb.name + "_manager") + "\" scope=\"application\" class=\"" + ejb.app_package + "." + TextUtils.toSunClassName(ejb.name) + "Manager\" />" + lf + lf);
 		code.append("<html>" + lf);
 		code.append("<head>" + lf);
-		code.append("	<title>OpenEJB BeanGen Test JSP for " + toSunClassName(ejb.name) + "</title>" + lf);
+		code.append("	<title>openEJB BeanGen Test JSP for " + TextUtils.toSunClassName(ejb.name) + "</title>" + lf);
 		code.append("</head>" + lf);
 		code.append("<body>" + lf);
 		code.append("<%" + lf);
-		code.append("    BeanHomeFactory factory = BeanHomeFactory.getFactory();" + lf);
-		code.append("    " + toSunClassName(ejb.name) + "Home home = factory.getHome(" + toSunClassName(ejb.name) + "Home.class, " + "\"java:comp/env/ejb/" + (ejb.jndi_basepath==null?"":(ejb.jndi_basepath + "/")) + toSunClassName(ejb.name) + "\");" + lf);
-		code.append("    // " + toSunClassName(ejb.name) + " bean = home.create();" + lf);
+		code.append("    " + TextUtils.toSunClassName(ejb.name) + " bean = " + TextUtils.toSunParameterName(ejb.name + "_manager") + ".findByPrimaryKey(1);" + lf);
 		code.append("%>" + lf);
-		code.append("<%-- = bean.sayHello() --%>" + lf);
 		code.append("</body>" + lf);
 		code.append("</html>" + lf);
 
 		return code.toString();
 	}
 
-	// Utility method to load some "standard" classes
-	private String loadResource(InputStream in) throws IOException
-	{
-		StringBuffer code = new StringBuffer();
-		int c = -1;
-		while((c = in.read()) != -1)
-			code.append((char)c);
-		in.close();
-		return code.toString();
-	}
-
-	// ready made makefile
-	private String ant_makefile() throws IOException
-	{
-		StringBuffer code = new StringBuffer();
-
-		code.append(
-			"<project name=\"" + project.name + "\" default=\"war\" basedir=\".\" >" + lf +
-			"  <!-- set global properties for this build - may be overridden -->" + lf +
-			"  <property name=\"openejb.home\" value=\"" + config.openejb_home + "\" />" + lf +
-			"  <property name=\"catalina.home\" value=\"" + config.catalina_home + "\" />" + lf +
-			"  <property name=\"webapp\" value=\"" + project.unix_name + "\" />" + lf +
-			"  <property name=\"beangen.version\" value=\"" + VERSION + "\" />" + lf +
-			"  <property name=\"src\" value=\"src\" />" + lf +
-			"  <property name=\"build\" value=\"build\" />" + lf +
-			"  <property name=\"dist\" value=\"dist\" />" + lf +
-			"  <property name=\"deploy-dir\" value=\".\" />" + lf + lf +
-
-			"  <path id=\"project.class.path\" >" + lf +
-			"    <pathelement path=\"${openejb.home}/lib/ejb-2.0.jar\" />" + lf +
-			"  </path>" + lf + lf +
-
-			"  <target name=\"banner\" >" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"    <echo message=\"*** BeanGen ${beangen.version}\" />" + lf +
-			"    <echo message=\"*** http://beangen.sourceforge.net\" />" + lf +
-			"    <echo message=\"***\" />" + lf +
-			"    <echo message=\"*** This Software is provided \'AS IS\'.  All express\" />" + lf +
-			"    <echo message=\"*** warranties, including any implied warranty of\" />" + lf +
-			"    <echo message=\"*** merchantability, satisfactory quality, fitness for a\" />" + lf +
-			"    <echo message=\"*** particular purpose, or non-infringement, are disclaimed,\" />" + lf +
-			"    <echo message=\"*** except to the extent that such disclaimers are held to\" />" + lf +
-			"    <echo message=\"*** be legally invalid.\" />" + lf +
-			"    <echo message=\"*** Permission to use, copy, modify, and distribute this\" />" + lf +
-			"    <echo message=\"*** Software and its documentation for NON-COMMERCIAL or\" />" + lf +
-			"    <echo message=\"*** COMMERCIAL purposes and without fee is hereby granted.\" />" + lf +
-			"    <echo message=\"***\" />" + lf +
-			"    <echo message=\"*** In order to have more finders you need to create then\" />" + lf +
-			"    <echo message=\"*** in the remote interfaces and define the OQL query in\" />" + lf +
-			"    <echo message=\"*** descriptors/openejb-jar.xml file.\" />" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"init\" >" + lf +
-			"    <!-- Create the time stamp -->" + lf +
-			"    <tstamp/>" + lf +
-			"    <!-- Create the build directory structure used by compile -->" + lf +
-			"    <mkdir dir=\"${build}\" />" + lf +
-			"    <mkdir dir=\"${dist}\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"compile\" depends=\"init\" >" + lf +
-			"    <!-- Compile the java code from ${src} into ${build} -->" + lf +
-			"    <javac srcdir=\"${src}\" destdir=\"${build}\" classpathref=\"project.class.path\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"j2ee\" depends=\"compile\" >" + lf +
-			"    <mkdir dir=\"${build}/META-INF\" />" + lf +
-			"    <copy file=\"descriptors/ejb-jar.xml\" todir=\"${build}/META-INF\" />" + lf +
-			"    <copy file=\"descriptors/openejb-jar.xml\" todir=\"${build}/META-INF\" />" + lf +
-			"    <jar jarfile=\"${dist}/${webapp}_j2ee.jar\" basedir=\"${build}\" includes=\"**/*EJB.class,**/*Home.class,**/*Remote.class,ejb/impl/core/*,ejb/impl/util/*,**/META-INF/*\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"war\" depends=\"banner,init,compile,j2ee\" >" + lf +
-			"    <mkdir dir=\"${dist}/webapps/${webapp}\" />" + lf +
-			"    <mkdir dir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
-			"    <mkdir dir=\"${dist}/webapps/${webapp}/WEB-INF/lib\" />" + lf +
-			"    <!-- Package Java Beans -->" + lf +
-			"    <jar jarfile=\"${dist}/webapps/${webapp}/WEB-INF/lib/webapp_beans.jar\" basedir=\"${build}\" excludes=\"**/*EJB.class,**/*Home.class,**/*Remote.class,**/META-INF/*\" />" + lf +
-			"    <!-- Add sample generated WEB.xml -->" + lf +
-			"    <copy file=\"descriptors/web.xml\" todir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
-			"    <copy file=\"descriptors/server.xml\" todir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
-			"    <!-- Add sample generated JSP's -->" + lf +
-			"    <copy todir=\"${dist}/webapps/${webapp}\" >" + lf +
-			"      <fileset dir=\"jsp\" />" + lf +
-			"    </copy>" + lf +
-			"    <!-- Pack everything into a WAR file -->" + lf +
-			"    <jar jarfile=\"${dist}/${webapp}.war\" basedir=\"${dist}/webapps/${webapp}\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"install\" depends=\"war\" >" + lf +
-			"    <!-- Copy Configuration Files over OpenEJB one's -->" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"    <echo message=\"*** Don't Forget to configure the JDBC Connection in OpenEJB\" />" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"    <copy file=\"descriptors/openejb.conf\" todir=\"${openejb.home}/conf\" />" + lf +
-			"    <copy file=\"descriptors/cmp_global_database.xml\" todir=\"${openejb.home}/conf\" />" + lf +
-			"    <copy file=\"descriptors/cmp_local_database.xml\" todir=\"${openejb.home}/conf\" />" + lf +
-			"    <copy file=\"descriptors/cmp_or_mapping.xml\" todir=\"${openejb.home}/conf\" />" + lf +
-			"    <copy file=\"${dist}/${webapp}_j2ee.jar\" todir=\"${openejb.home}/lib\" />" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"    <echo message=\"*** Don't Forget to merge server.xml from webapp into\" />" + lf +
-			"    <echo message=\"*** Catalina's server.xml\" />" + lf +
-			"    <echo message=\"************************************************************\" />" + lf +
-			"    <copy file=\"${dist}/${webapp}.war\" todir=\"${catalina.home}/webapps\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"  <target name=\"clean\" >" + lf +
-			"    <!-- Delete the ${build} directory trees -->" + lf +
-			"    <delete dir=\"${build}\" />" + lf +
-			"    <delete dir=\"${dist}\" />" + lf +
-			"  </target>" + lf + lf +
-
-			"</project>"
-		);
-		return code.toString();
-	}
-
-	// ready made classes
-	private String commons_trace() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/Trace.java");
-		return loadResource(in);
-	}
-
-	// ready made classes
-	private String commons_beanhome_factory() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/BeanHomeFactory.java");
-		return loadResource(in);
-	}
-
-	// ready made classes
-	private String commons_beanhome_factory_exception() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/BeanHomeFactoryException.java");
-		return loadResource(in);
-	}
-
-	// ready made classes
-	private String commons_entity_bean_adapter() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/EntityBeanAdapter.java");
-		return loadResource(in);
-	}
-
-	// ready made classes
-	private String commons_session_bean_adapter() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/SessionBeanAdapter.java");
-		return loadResource(in);
-	}
-
-	// ready made classes
-	private String commons_mandatoryfield_exception() throws IOException
-	{
-		InputStream in = this.getClass().getClassLoader().getResourceAsStream("org/openejb/generator/templates/MandatoryFieldException.java");
-		return loadResource(in);
-	}
-
 	// The final method that will return the generated code in a jar stream.
 	public void generate(OutputStream out) throws IOException
 	{
 		JarOutputStream jout = new JarOutputStream( out );
+		JarEntry jentry = null;
 
-		JarEntry jentry = new JarEntry("build.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "build.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.ant_makefile().getBytes());
 
-		jentry = new JarEntry("descriptors/server.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/server.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.tomcat_server_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/web.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/web.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.tomcat_webapp_web_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/openejb.conf");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/openejb.conf");
 		jout.putNextEntry(jentry);
 		jout.write(this.openejb_conf_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/cmp_global_database.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/cmp_global_database.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.cmp_global_database_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/cmp_or_mapping.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/cmp_or_mapping.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.cmp_or_mapping_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/cmp_local_database.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/cmp_local_database.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.cmp_local_database_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/ejb-jar.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/ejb-jar.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.ejb_jar_xml().getBytes());
 
-		jentry = new JarEntry("descriptors/openejb-jar.xml");
+		jentry = new JarEntry(project.unix_name + "/" + "descriptors/openejb-jar.xml");
 		jout.putNextEntry(jentry);
 		jout.write(this.openejb_jar_xml().getBytes());
 
@@ -2336,76 +2421,88 @@ public class BeanGen
 		{
 			ejb = (EJB)ejbs.elementAt(i);
 
+			if(ejb.needsPkObject())
+			{
+				// pk object
+				jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + "PK.java" );
+				jout.putNextEntry(jentry);
+				jout.write(this.pk( ejb ).getBytes());
+			}
+
 			// home interface
-			jentry = new JarEntry( "src/" + toJarPath(ejb.app_package) + toSunClassName(ejb.name) + "Home.java" );
+			jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + "Home.java" );
 			jout.putNextEntry(jentry);
 			jout.write(this.home_interface( ejb ).getBytes());
 
 			// remote interface
-			jentry = new JarEntry( "src/" + toJarPath(ejb.app_package) + toSunClassName(ejb.name) + "Remote.java" );
+			jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + "Remote.java" );
 			jout.putNextEntry(jentry);
 			jout.write(this.remote_interface( ejb ).getBytes());
 
 			// EJB
-			jentry = new JarEntry( "src/" + toJarPath(ejb.app_package) + toSunClassName(ejb.name) + "EJB.java" );
+			jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + "EJB.java" );
 			jout.putNextEntry(jentry);
 			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
 				jout.write(this.entity_bean( ejb ).getBytes());
 
 			// EJB Wrapper
-			jentry = new JarEntry( "src/" + toJarPath(ejb.app_package) + toSunClassName(ejb.name) + ".java" );
+			jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + ".java" );
 			jout.putNextEntry(jentry);
 			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
 				jout.write(this.wraper_bean( ejb ).getBytes());
 
 			// Wrapper Manager
-			jentry = new JarEntry( "src/" + toJarPath(ejb.app_package) + toSunClassName(ejb.name) + "Manager.java" );
+			jentry = new JarEntry(project.unix_name + "/src/" + TextUtils.toJarPath(ejb.app_package) + TextUtils.toSunClassName(ejb.name) + "Manager.java" );
 			jout.putNextEntry(jentry);
 			if(ejb.type==EJB.BMP || ejb.type==EJB.CMP)
 				jout.write(this.manager_bean( ejb ).getBytes());
 
 			// JSP Sample
-			jentry = new JarEntry("jsp/" + toSunMethodName(ejb.name) + "_test.jsp");
+			jentry = new JarEntry(project.unix_name + "/jsp/" + TextUtils.toSunMethodName(ejb.name) + "_test.jsp");
 			jout.putNextEntry(jentry);
 			jout.write(this.test_jsp( ejb ).getBytes());
-		}
 
+		}
 		// Logger
-		jentry = new JarEntry("src/ejb/impl/util/Trace.java");
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/util/Trace.java");
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_trace().getBytes());
 
 		// EJB utilities (Home Factory)
-		jentry = new JarEntry( "src/ejb/impl/util/BeanHomeFactory.java" );
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/util/BeanHomeFactory.java" );
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_beanhome_factory().getBytes());
 
 		// EJB utilities (Home Factory)
-		jentry = new JarEntry( "src/ejb/impl/util/BeanHomeFactoryException.java" );
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/util/BeanHomeFactoryException.java" );
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_beanhome_factory_exception().getBytes());
 
 		// EJB utilities (Entity Bean Adapter)
-		jentry = new JarEntry( "src/ejb/impl/core/EntityBeanAdapter.java" );
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/core/EntityBeanAdapter.java" );
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_entity_bean_adapter().getBytes());
 
 		// EJB utilities (Session Bean Adapter)
-		jentry = new JarEntry( "src/ejb/impl/core/SessionBeanAdapter.java" );
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/core/SessionBeanAdapter.java" );
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_session_bean_adapter().getBytes());
 
 		// EJB utilities (MandatoryField Exception)
-		jentry = new JarEntry( "src/ejb/impl/core/MandatoryFieldException.java" );
+		jentry = new JarEntry(project.unix_name + "/src/ejb/impl/core/MandatoryFieldException.java" );
 		jout.putNextEntry(jentry);
 		jout.write(this.commons_mandatoryfield_exception().getBytes());
-
 		jout.close();
 	}
 
 	// this is my file format parser
 	protected void parse(String file) throws FileNotFoundException, IOException
 	{
+		// runtime temporary parser objectecs
+		FIELD field = null;
+		EJB ejb = null;
+		RESOURCE res = null;
+
 		BufferedReader in = null;
 		String sz = null;
 		StringTokenizer st = null;
@@ -2451,8 +2548,9 @@ public class BeanGen
 							else if(sz.equalsIgnoreCase("FIELD"))
 							{
 								field = new FIELD();
-								if(st.hasMoreTokens()) field.type = st.nextToken();
+								if(st.hasMoreTokens()) field.db_type = st.nextToken();
 								if(st.hasMoreTokens()) field.db_name = st.nextToken();
+								if(st.hasMoreTokens()) field.type = st.nextToken();
 								if(st.hasMoreTokens()) field.name = st.nextToken();
 								if(st.hasMoreTokens()) field.nullable = st.nextToken().equalsIgnoreCase("NULL");
 								if(st.hasMoreTokens()) field.ro = st.nextToken().equalsIgnoreCase("RO");
@@ -2531,7 +2629,7 @@ public class BeanGen
 									else System.err.println("Unknown relationship: " + tmp);
 								}
 								if(st.hasMoreTokens()) col.obj_name = st.nextToken();
-								if(st.hasMoreTokens()) col.relation_table = st.nextToken();
+								if(st.hasMoreTokens()) col.alias = st.nextToken();
 								ejb.collections.addElement(col);
 							}
 							else if(sz.equalsIgnoreCase("PROJECT"))
@@ -2541,9 +2639,9 @@ public class BeanGen
 							}
 							else if(sz.equalsIgnoreCase("DB_ALIAS"))
 							{
-								if(st.hasMoreTokens()) field.db_alias.addElement(st.nextToken());
+								if(st.hasMoreTokens()) field.db_alias = st.nextToken();
 							}
-							else if(sz.equalsIgnoreCase("LAZY_LOADING"))
+							else if(sz.equalsIgnoreCase("CACHE"))
 							{
 								String tmp = null;
 								while(st.hasMoreTokens())
@@ -2581,382 +2679,196 @@ public class BeanGen
 		in.close();
 	}
 
-	// helper method to the jar stream
-	private String toJarPath(String _package)
+
+	////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////
+
+	// Utility method to load some "standard" classes
+	private String loadResource(InputStream in) throws IOException
 	{
-		if(_package == null || _package.equals(""))
-			return "";
-
-		StringBuffer sb = new StringBuffer();
-		for(int i=0; i<_package.length(); i++)
-		{
-			if(_package.charAt(i) == '.')
-				sb.append("/");
-			else
-				sb.append(_package.charAt(i));
-		}
-
-		sb.append("/");
-
-		return sb.toString();
+		StringBuffer code = new StringBuffer();
+		int c = -1;
+		while((c = in.read()) != -1)
+			code.append((char)c);
+		in.close();
+		return code.toString();
 	}
 
-	////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////
+	// ready made classes
+	private String commons_trace() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/Trace.java");
+		return loadResource(in);
+	}
+
+	// ready made classes
+	private String commons_beanhome_factory() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/BeanHomeFactory.java");
+		return loadResource(in);
+	}
+
+	// ready made classes
+	private String commons_beanhome_factory_exception() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/BeanHomeFactoryException.java");
+		return loadResource(in);
+	}
+
+	// ready made classes
+	private String commons_entity_bean_adapter() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/EntityBeanAdapter.java");
+		return loadResource(in);
+	}
+
+	// ready made classes
+	private String commons_session_bean_adapter() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/SessionBeanAdapter.java");
+		return loadResource(in);
+	}
+
+	// ready made classes
+	private String commons_mandatoryfield_exception() throws IOException
+	{
+		InputStream in = this.getClass().getClassLoader().getResourceAsStream("net/sourceforge/beangen/templates/MandatoryFieldException.java");
+		return loadResource(in);
+	}
+
+	// ready made makefile
+	private String ant_makefile() throws IOException
+	{
+		StringBuffer code = new StringBuffer();
+
+		code.append(
+			"<project name=\"" + project.name + "\" default=\"war\" basedir=\".\" >" + lf +
+			"  <!-- set global properties for this build - may be overridden -->" + lf +
+			"  <property name=\"openejb.home\" value=\"" + config.openejb_home + "\" />" + lf +
+			"  <property name=\"catalina.home\" value=\"" + config.catalina_home + "\" />" + lf +
+			"  <property name=\"webapp\" value=\"" + project.unix_name + "\" />" + lf +
+			"  <property name=\"beangen.version\" value=\"" + VERSION + "\" />" + lf +
+			"  <property name=\"src\" value=\"src\" />" + lf +
+			"  <property name=\"build\" value=\"build\" />" + lf +
+			"  <property name=\"dist\" value=\"dist\" />" + lf +
+			"  <property name=\"doc\" value=\"doc\" />" + lf +
+			"  <property name=\"deploy-dir\" value=\".\" />" + lf + lf +
+
+			"  <path id=\"project.class.path\" >" + lf +
+			"    <pathelement path=\"${openejb.home}/lib/ejb-2.0.jar\" />" + lf +
+			"  </path>" + lf + lf +
+
+			"  <target name=\"banner\" >" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"    <echo message=\"*** BeanGen ${beangen.version}\" />" + lf +
+			"    <echo message=\"*** http://beangen.sourceforge.net\" />" + lf +
+			"    <echo message=\"***\" />" + lf +
+			"    <echo message=\"*** This Software is provided \'AS IS\'.  All express\" />" + lf +
+			"    <echo message=\"*** warranties, including any implied warranty of\" />" + lf +
+			"    <echo message=\"*** merchantability, satisfactory quality, fitness for a\" />" + lf +
+			"    <echo message=\"*** particular purpose, or non-infringement, are disclaimed,\" />" + lf +
+			"    <echo message=\"*** except to the extent that such disclaimers are held to\" />" + lf +
+			"    <echo message=\"*** be legally invalid.\" />" + lf +
+			"    <echo message=\"*** Permission to use, copy, modify, and distribute this\" />" + lf +
+			"    <echo message=\"*** Software and its documentation for NON-COMMERCIAL or\" />" + lf +
+			"    <echo message=\"*** COMMERCIAL purposes and without fee is hereby granted.\" />" + lf +
+			"    <echo message=\"***\" />" + lf +
+			"    <echo message=\"*** In order to have more finders you need to create then\" />" + lf +
+			"    <echo message=\"*** in the remote interfaces and define the OQL query in\" />" + lf +
+			"    <echo message=\"*** descriptors/openejb-jar.xml file.\" />" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"init\" >" + lf +
+			"    <!-- Create the time stamp -->" + lf +
+			"    <tstamp/>" + lf +
+			"    <!-- Create the build directory structure used by compile -->" + lf +
+			"    <mkdir dir=\"${build}\" />" + lf +
+			"    <mkdir dir=\"${dist}\" />" + lf +
+			"    <mkdir dir=\"${doc}\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"compile\" depends=\"init\" >" + lf +
+			"    <!-- Compile the java code from ${src} into ${build} -->" + lf +
+			"    <javac srcdir=\"${src}\" destdir=\"${build}\" classpathref=\"project.class.path\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"j2ee\" depends=\"compile\" >" + lf +
+			"    <mkdir dir=\"${build}/META-INF\" />" + lf +
+			"    <copy file=\"descriptors/ejb-jar.xml\" todir=\"${build}/META-INF\" />" + lf +
+			"    <copy file=\"descriptors/openejb-jar.xml\" todir=\"${build}/META-INF\" />" + lf +
+			"    <jar jarfile=\"${dist}/${webapp}_j2ee.jar\" basedir=\"${build}\" includes=\"**/*EJB.class,**/*Home.class,**/*Remote.class,**/*PK.class,ejb/impl/core/*,ejb/impl/util/*,**/META-INF/*\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"war\" depends=\"banner,init,compile,j2ee,documentation\" >" + lf +
+			"    <mkdir dir=\"${dist}/webapps/${webapp}\" />" + lf +
+			"    <mkdir dir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
+			"    <mkdir dir=\"${dist}/webapps/${webapp}/WEB-INF/lib\" />" + lf +
+			"    <!-- Package Java Beans -->" + lf +
+			"    <jar jarfile=\"${dist}/webapps/${webapp}/WEB-INF/lib/webapp_beans.jar\" basedir=\"${build}\" excludes=\"**/*EJB.class,**/*Home.class,**/*Remote.class,**/META-INF/*\" />" + lf +
+			"    <!-- Add sample generated WEB.xml -->" + lf +
+			"    <copy file=\"descriptors/web.xml\" todir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
+			"    <copy file=\"descriptors/server.xml\" todir=\"${dist}/webapps/${webapp}/WEB-INF\" />" + lf +
+			"    <!-- Add sample generated JSP's -->" + lf +
+			"    <copy todir=\"${dist}/webapps/${webapp}\" >" + lf +
+			"      <fileset dir=\"jsp\" />" + lf +
+			"    </copy>" + lf +
+			"    <!-- Add API -->" + lf +
+			"    <copy todir=\"${dist}/webapps/${webapp}/api\" >" + lf +
+			"      <fileset dir=\"${doc}/api\" />" + lf +
+			"    </copy>" + lf +
+			"    <!-- Pack everything into a WAR file -->" + lf +
+			"    <jar jarfile=\"${dist}/${webapp}.war\" basedir=\"${dist}/webapps/${webapp}\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"install\" depends=\"war\" >" + lf +
+			"    <!-- Copy Configuration Files over OpenEJB one's -->" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"    <echo message=\"*** Don't Forget to configure the JDBC Connection in OpenEJB\" />" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"    <copy file=\"descriptors/openejb.conf\" todir=\"${openejb.home}/conf\" />" + lf +
+			"    <copy file=\"descriptors/cmp_global_database.xml\" todir=\"${openejb.home}/conf\" />" + lf +
+			"    <copy file=\"descriptors/cmp_local_database.xml\" todir=\"${openejb.home}/conf\" />" + lf +
+			"    <copy file=\"descriptors/cmp_or_mapping.xml\" todir=\"${openejb.home}/conf\" />" + lf +
+			"    <copy file=\"${dist}/${webapp}_j2ee.jar\" todir=\"${openejb.home}/lib\" />" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"    <echo message=\"*** Don't Forget to merge server.xml from webapp into\" />" + lf +
+			"    <echo message=\"*** Catalina's server.xml\" />" + lf +
+			"    <echo message=\"************************************************************\" />" + lf +
+			"    <copy file=\"${dist}/${webapp}.war\" todir=\"${catalina.home}/webapps\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"clean\" >" + lf +
+			"    <!-- Delete the ${build} directory trees -->" + lf +
+			"    <delete dir=\"${build}\" />" + lf +
+			"    <delete dir=\"${dist}\" />" + lf +
+			"  </target>" + lf + lf +
+
+			"  <target name=\"documentation\" depends=\"j2ee\">" + lf +
+			"    <javadoc destdir=\"${doc}/api\" defaultexcludes=\"yes\" classpathref=\"project.class.path\" author=\"true\" version=\"true\" windowtitle=\"${webapp} API\">" + lf +
+			"      <fileset dir=\"${src}\" defaultexcludes=\"yes\">" + lf +
+			"        <include name=\"**/*.java\" />" + lf +
+			"      </fileset>" + lf +
+			"      <bottom><![CDATA[<i>Powered by <a href=\"http://beangen.sourceforge.net\">BeanGen ${beangen.version}</a>. All Rights Reserved.</i>]]></bottom>" + lf +
+			"    </javadoc>" + lf +
+			"  </target>" + lf + lf +
+
+			"</project>"
+		);
+		return code.toString();
+	}
 
 	public static void main(String[] args) throws FileNotFoundException, IOException
 	{
 		System.out.println("BeanGen" + VERSION);
-		System.out.println("  Usage: BeanGen <input file> <destination file(.jar)>");
 
-		// DEBUG
+		if(args.length < 2)
+			System.out.println("  Usage: BeanGen <input file> <destination file(.jar)>");
+
 		BeanGen main = new BeanGen();
-		if(args.length > 0)
-			main.parse(args[0]);
-		else
-			main.parse("c:\\projects\\ejb\\sandbox\\oejb\\TITAN.txt");
-
-		if(args.length > 1)
-			main.generate(new FileOutputStream(args[1]));
-		else
-			main.generate(new FileOutputStream("c:\\beans.jar"));
+		main.parse(args[0]);
+		main.generate(new FileOutputStream(args[1]));
 
 		System.out.println("Done.");
-	}
-	////////////////////////////////////////////////////////////////////////////
-	// Utilities
-	////////////////////////////////////////////////////////////////////////////
-
-	// String manipulation to ease the class name generation
-	private String toSunClassName(String s)
-	{
-		StringBuffer sb = new StringBuffer();
-
-		if(s != null)
-		{
-			StringTokenizer st = new StringTokenizer(s, " _");
-			String sz = null;
-			while(st.hasMoreTokens())
-			{
-				sz = st.nextToken();
-				sz = sz.toLowerCase();
-				sz = sz.substring(0, 1).toUpperCase() + sz.substring(1);
-				sb.append(sz);
-			}
-		}
-
-		return sb.toString();
-	}
-
-	// very naive way to make words more readable...
-	private String toPlural(String s)
-	{
-		if(s.charAt(s.length() - 1) == 'y')
-			return s.substring(0, s.length()-1) + "ies";
-		else
-			return s + "s";
-	}
-
-	// convert simple types to java types
-	private String toJavaType(String s)
-	{
-		if(s.equals("bigint"))			return "java.lang.Long";
-		if(s.equals("binary"))			return "byte[]";
-		if(s.equals("bit"))				return "java.lang.Boolean";
-		if(s.equals("blob"))			return "java.io.InputStream";
-		if(s.equals("char"))			return "java.lang.String";
-		if(s.equals("clob"))			return "java.sql.Clob";
-		if(s.equals("date"))			return "java.sql.Date";
-		if(s.equals("decimal"))			return "java.math.BigDecimal";
-		if(s.equals("double"))			return "java.lang.Double";
-		if(s.equals("float"))			return "java.lang.Double";
-		if(s.equals("integer"))			return "java.lang.Integer";
-		if(s.equals("longvarbinary"))	return "byte[]";
-		if(s.equals("longvarchar"))		return "java.lang.String";
-		if(s.equals("numeric"))			return "java.math.BigDecimal";
-		if(s.equals("real"))			return "java.lang.Float";
-		if(s.equals("smallint"))		return "java.lang.Short";
-		if(s.equals("time"))			return "java.sql.Time";
-		if(s.equals("timestamp"))		return "java.sql.Timestamp";
-		if(s.equals("tinyint"))			return "java.lang.Byte";
-		if(s.equals("varbinary"))		return "byte[]";
-		if(s.equals("varchar"))			return "java.lang.String";
-
-		System.out.println("Unknown DataType: " + s);
-		return "Unknown";
-	}
-
-	// convert objects into native java types (when possible)
-	private String toNativeJavaType(String s)
-	{
-		if(s.equals("java.lang.Boolean"))	return "boolean";
-		if(s.equals("java.lang.Byte"))		return "byte";
-		if(s.equals("java.lang.Character"))	return "char";
-		if(s.equals("java.lang.Double"))	return "double";
-		if(s.equals("java.lang.Float"))		return "float";
-		if(s.equals("java.lang.Integer"))	return "int";
-		if(s.equals("java.lang.Long"))		return "long";
-		if(s.equals("java.lang.Short"))		return "short";
-		if(s.equals("java.lang.String"))	return "String";
-
-		return s;
-	}
-
-	private String getJavaNativeFromObject(String s)
-	{
-		if(s.equals("java.lang.Boolean"))	return ".booleanValue()";
-		if(s.equals("java.lang.Byte"))		return ".byteValue()";
-		if(s.equals("java.lang.Character"))	return ".charValue()";
-		if(s.equals("java.lang.Double"))	return ".doubleValue()";
-		if(s.equals("java.lang.Float"))		return ".floatValue()";
-		if(s.equals("java.lang.Integer"))	return ".intValue()";
-		if(s.equals("java.lang.Long"))		return ".longValue()";
-		if(s.equals("java.lang.Short"))		return ".shortValue()";
-		return "";
-	}
-
-	private String getJavaObjectConstructorForNative(String type, String name)
-	{
-		if(type.equals("boolean"))	return "new java.lang.Boolean(" + name + ")";
-		if(type.equals("byte"))		return "new java.lang.Byte(" + name + ")";
-		if(type.equals("char"))		return "new java.lang.Character(" + name + ")";
-		if(type.equals("double"))	return "new java.lang.Double(" + name + ")";
-		if(type.equals("float"))	return "new java.lang.Float(" + name + ")";
-		if(type.equals("int"))		return "new java.lang.Integer(" + name + ")";
-		if(type.equals("long"))		return "new java.lang.Long(" + name + ")";
-		if(type.equals("short"))	return "new java.lang.Short(" + name + ")";
-		return name;
-	}
-
-	private boolean isNative(String type)
-	{
-		if(type.equals("boolean"))	return true;
-		if(type.equals("byte"))		return true;
-		if(type.equals("char"))		return true;
-		if(type.equals("double"))	return true;
-		if(type.equals("float"))	return true;
-		if(type.equals("int"))		return true;
-		if(type.equals("long"))		return true;
-		if(type.equals("short"))	return true;
-		return false;
-	}
-
-	// convert objects into native java types (when possible)
-	private String getInitialValueFor(String s)
-	{
-		if(s.equals("boolean"))	return "false";
-		if(s.equals("byte"))	return "0";
-		if(s.equals("char"))	return "'\\0'";
-		if(s.equals("double"))	return "0d";
-		if(s.equals("float"))	return "0f";
-		if(s.equals("int"))		return "0";
-		if(s.equals("long"))	return "0l";
-		if(s.equals("short"))	return "0";
-
-		return "null";
-	}
-
-	// String manipulation to ease the method name generation
-	private String toSunMethodName(String s)
-	{
-		StringBuffer sb = new StringBuffer();
-
-		if(s != null)
-		{
-			StringTokenizer st = new StringTokenizer(s, " _");
-			String sz = null;
-			boolean fst = true;
-			while(st.hasMoreTokens())
-			{
-				sz = st.nextToken();
-				if(fst)
-				{
-					sz = sz.substring(0, 1).toLowerCase() + sz.substring(1);
-					fst = false;
-				}
-				else
-					sz = sz.substring(0, 1).toUpperCase() + sz.substring(1);
-				sb.append(sz);
-			}
-		}
-
-		return sb.toString();
-	}
-
-	// String manipulation to ease the method parameter name generation
-	private String toSunParameterName(String s)
-	{
-		StringBuffer sb = new StringBuffer();
-
-		if(s != null)
-		{
-			int idx = s.lastIndexOf(".");
-			if(idx != -1)
-				s = s.substring(idx + 1);
-
-			StringTokenizer st = new StringTokenizer(s, " _");
-			String sz = null;
-			boolean fst = true;
-			while(st.hasMoreTokens())
-			{
-				sz = st.nextToken();
-				if(fst)
-				{
-					sz = sz.substring(0, 1).toLowerCase() + sz.substring(1);
-					fst = false;
-				}
-				else
-					sz = sz.substring(0, 1).toUpperCase() + sz.substring(1);
-				sb.append(sz);
-			}
-		}
-
-		return sb.toString();
-	}
-	////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////
-	private class EJB
-	{
-		public static final int BMP = 0;
-		public static final int CMP = 1;
-		public static final int STATEFULL = 2;
-		public static final int STATELESS = 3;
-		public static final int MESSAGE = 4;
-
-		protected int type = -1;
-		protected String db_name = null;
-		protected String name = null;
-		protected String app_package = "";
-		protected String description = "";
-		protected String author = "";
-		protected String jndi_basepath = null;
-		protected Vector fields = new Vector();
-		protected Vector resources = new Vector();
-		protected Vector collections = new Vector();
-	}
-
-	private class FIELD
-	{
-		protected String type = null;
-		protected String db_name = null;
-		protected String name = null;
-		protected boolean nullable = false;
-		protected boolean pk = false;
-		protected boolean fk = false;
-		protected boolean ro = false;
-
-		protected Vector db_alias = new Vector();
-	}
-
-	private class RESOURCE
-	{
-		public static final int DATASOURCE = 0;
-
-		protected int type = -1;
-		protected String name = null;
-		protected String jndi = null;
-		protected String engine = null;
-		protected String key_gen = null;
-	}
-
-	private class COLLECTION
-	{
-		public static final int ONE_TO_MANY = 0;
-		public static final int MANY_TO_MANY = 1;
-
-		protected int type = -1;
-		protected String obj_name = null;
-		protected String relation_table = null;
-	}
-
-	private class PROJECT
-	{
-		protected String name = null;
-		protected String unix_name = null;
-		protected LAZY_LOADING lazy = new LAZY_LOADING();
-	}
-
-	private class LAZY_LOADING
-	{
-		protected boolean collections = false;
-		protected boolean fields = false;
-		protected boolean fks = false;
-	}
-
-	private class BEANGEN_CONFIG
-	{
-		protected String catalina_home = "C:/jakarta-tomcat";
-		protected String openejb_home = "C:/openejb";
-	}
-
-	////////////////////////////////////////////////////////////////////////////
-	// Outdated...
-	////////////////////////////////////////////////////////////////////////////
-	public void addENTITY(String management, String db_name, String name, String app_package, String author, String description)
-	{
-		ejb = new EJB();
-		if("BMP".equalsIgnoreCase(management))
-			ejb.type = EJB.BMP;
-		else if("CMP".equalsIgnoreCase(management))
-			ejb.type = EJB.CMP;
-
-		ejb.db_name = db_name;
-		ejb.name = name;
-		ejb.app_package = app_package;
-		ejb.author = author;
-		ejb.description = description;
-		ejbs.addElement( ejb );
-	}
-
-	public void addRESOURCE_LINK(String name)
-	{
-		res = null;
-		boolean found = false;
-
-		for(int i=0; i<resources.size(); i++)
-		{
-			res = (RESOURCE) resources.elementAt(i);
-			if(name != null)
-				if(name.equals(res.name))
-				{
-					ejb.resources.addElement( res );
-					found = true;
-					break;
-				}
-		}
-		if(!found)
-			System.out.println("Ignoring undefined resouce: " + name);
-	}
-
-	public void addFIELD(String type, String db_name, String name, boolean nullable, boolean read_only, boolean pk)
-	{
-		field = new FIELD();
-		field.type = type;
-		field.db_name = db_name;
-		field.name = name;
-		field.nullable = nullable;
-		field.ro = read_only;
-		field.pk = pk;
-		ejb.fields.addElement( field );
-	}
-
-	public void addRESOURCE(String type, String name, String jndi_name)
-	{
-		// RESOURCE:DATASOURCE:Connection:jdbc/database
-		res = new RESOURCE();
-		if("DATASOURCE".equalsIgnoreCase(type))
-			res.type = RESOURCE.DATASOURCE;
-		res.name = name;
-		res.jndi = jndi_name;
-		this.resources.addElement( res );
-	}
-
-	public void reset()
-	{
-		ejbs = new Vector();
-		resources = new Vector();
-		field = null;
-		ejb = null;
-		res = null;
 	}
 }
