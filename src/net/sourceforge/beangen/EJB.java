@@ -44,9 +44,7 @@ public class EJB
 {
 	public static final int BMP = 0;
 	public static final int CMP = 1;
-	public static final int STATEFULL = 2;
-	public static final int STATELESS = 3;
-	public static final int MESSAGE = 4;
+	public static final int POJO = 2;
 
 	protected int type = -1;
 	protected String db_name = null;
@@ -88,18 +86,28 @@ public class EJB
 			}
 		}
 
-		System.err.println("No PK found for :" + this.db_name + " assuming CompoundKey");
+		//System.err.println("No PK found for :" + this.db_name + " assuming CompoundKey");
 		return getPkPackage() + "." + TextUtils.toSunClassName(this.name + "_p_k");
+	}
+
+	public String getPkDbType()
+	{
+		for(int i=0; i<this.fields.size(); i++)
+		{
+			if(((FIELD)this.fields.elementAt(i)).pk)
+			{
+				return ((FIELD)this.fields.elementAt(i)).db_type;
+			}
+		}
+		return null;
 	}
 
 	public String getType()
 	{
 		if(this.type==EJB.BMP || this.type==EJB.CMP)
 			return "Entity";
-		else if(this.type==EJB.STATEFULL || this.type == EJB.STATELESS)
+		else if(this.type==EJB.POJO)
 			return "Session";
-		else if(this.type==EJB.MESSAGE)
-			System.err.println("Don't Know how to handle MessageBeans yet...");
 
 		return "Unknown";
 	}
@@ -169,10 +177,20 @@ public class EJB
 
 	public String getEJBPackage()
 	{
-		if(this.app_package == null)
-			return "j2ee.entity";
+		if(this.type == EJB.POJO)
+		{
+			if(this.app_package == null)
+				return "j2ee.jdo";
+			else
+				return this.app_package + ".j2ee.jdo";
+		}
 		else
-			return this.app_package + ".j2ee.entity";
+		{
+			if(this.app_package == null)
+				return "j2ee.entity";
+			else
+				return this.app_package + ".j2ee.entity";
+		}
 	}
 
 	public String getPkPackage()

@@ -126,6 +126,76 @@ public class TextUtils {
 		return s;
 	}
 
+	public static String getJDBCSetter(String s)
+	{
+		if(s == null)
+		{
+			return "Unknown";
+		}
+
+		if(s.equals("bigint"))			return "setLong";
+		if(s.equals("binary"))			return "setBytes";
+		if(s.equals("bit"))				return "setBoolean";
+		if(s.equals("blob"))			return "setBlob";
+		if(s.equals("char"))			return "setString";
+		if(s.equals("clob"))			return "setClob";
+		if(s.equals("date"))			return "setDate";
+		if(s.equals("decimal"))			return "setBigDecimal";
+		if(s.equals("double"))			return "setDouble";
+		if(s.equals("float"))			return "setDouble";
+		if(s.equals("integer"))			return "setInt";
+		if(s.equals("longvarbinary"))	return "setBytes";
+		if(s.equals("longvarchar"))		return "setString";
+		if(s.equals("numeric"))			return "setBigDecimal";
+		if(s.equals("real"))			return "setFloat";
+		if(s.equals("smallint"))		return "setShort";
+		if(s.equals("time"))			return "setTime";
+		if(s.equals("timestamp"))		return "setTimestamp";
+		if(s.equals("tinyint"))			return "setByte";
+		if(s.equals("varbinary"))		return "setBytes";
+		if(s.equals("varchar"))			return "setString";
+		if(s.equals("null"))			return "setNull";
+
+		if(s.indexOf("PK")==-1)
+			System.out.println("Unknown DataType: " + s + " assuming Parameterized Type...");
+		return s;
+	}
+
+	public static String getJDBCGetter(String s)
+	{
+		if(s == null)
+		{
+			return "Unknown";
+		}
+
+		if(s.equals("bigint"))			return "getLong";
+		if(s.equals("binary"))			return "getBytes";
+		if(s.equals("bit"))				return "getBoolean";
+		if(s.equals("blob"))			return "getBlob";
+		if(s.equals("char"))			return "getString";
+		if(s.equals("clob"))			return "getClob";
+		if(s.equals("date"))			return "getDate";
+		if(s.equals("decimal"))			return "getBigDecimal";
+		if(s.equals("double"))			return "getDouble";
+		if(s.equals("float"))			return "getDouble";
+		if(s.equals("integer"))			return "getInt";
+		if(s.equals("longvarbinary"))	return "getBytes";
+		if(s.equals("longvarchar"))		return "getString";
+		if(s.equals("numeric"))			return "getBigDecimal";
+		if(s.equals("real"))			return "getFloat";
+		if(s.equals("smallint"))		return "getShort";
+		if(s.equals("time"))			return "getTime";
+		if(s.equals("timestamp"))		return "getTimestamp";
+		if(s.equals("tinyint"))			return "getByte";
+		if(s.equals("varbinary"))		return "getBytes";
+		if(s.equals("varchar"))			return "getString";
+		if(s.equals("null"))			return "getNull";
+
+		if(s.indexOf("PK")==-1)
+			System.out.println("Unknown DataType: " + s + " assuming Parameterized Type...");
+		return s;
+	}
+
 	public static String toJavaFieldType(String s)
 	{
 		if(s == null)

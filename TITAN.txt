@@ -1,3 +1,7 @@
+###############################################################################
+# Configurations
+###############################################################################
+
 CONFIG:CATALINA:c:/jakarta-tomcat
 CONFIG:OPENEJB:c:/openejb-1.0
 
@@ -7,11 +11,19 @@ PROJECT:titan:Titan Vacances
 # Enable Lazy loading (not fully functional)
 CACHE:COLLECTIONS:FIELDS:FKS
 
+###############################################################################
+# Resources
+###############################################################################
+
 # Define a global DataSource Resource
 RESOURCE:DATASOURCE:dbserver:jdbc/titan:mysql:IDENTITY
 
+###############################################################################
+# EJBs
+###############################################################################
+
 # define a CMP entity bean
-ENTITY:CMP:CABIN:cabin:com.titan.j2ee
+BEAN:CMP:CABIN:cabin:com.titan.j2ee
 
   # inside jndi, this bean will be located under titan folder (optional)
   JNDI-BASEPATH:titan
@@ -29,7 +41,7 @@ ENTITY:CMP:CABIN:cabin:com.titan.j2ee
   # this bean will have a datasource resource
   RESOURCE-LINK:dbserver
 
-ENTITY:CMP:SHIP:ship:com.titan.j2ee
+BEAN:CMP:SHIP:ship:com.titan.j2ee
 
   JNDI-BASEPATH:titan
 

@@ -49,6 +49,7 @@ public class FIELD {
 	protected boolean nullable = false;
 	protected boolean pk = false;
 	protected boolean fk = false;
+	protected boolean ck = false;
 	protected boolean ro = false;
 	protected String db_alias = "";
 

@@ -1,4 +1,4 @@
-package ejb.impl.core;
+package ejb.exception;
 
 // Standard imports
 import java.io.*;

@@ -1,4 +1,4 @@
-package ejb.beangen.exception;
+package ejb.exception;
 
 // Standard packages
 

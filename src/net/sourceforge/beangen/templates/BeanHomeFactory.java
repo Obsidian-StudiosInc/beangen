@@ -1,4 +1,4 @@
-package ejb.beangen.util;
+package ejb.util;
 
 // Standard packages
 import java.util.Map;
@@ -11,7 +11,7 @@ import javax.rmi.PortableRemoteObject;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import ejb.beangen.exception.BeanHomeFactoryException;
+import ejb.exception.BeanHomeFactoryException;
 
 /**
  *	Design pattern for creating and caching the Home objects for easy access.

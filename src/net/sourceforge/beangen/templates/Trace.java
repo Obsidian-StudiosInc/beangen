@@ -26,7 +26,7 @@
 /* warranty.                                                               */
 /*                                                                         */
 /***************************************************************************/
-package ejb.beangen.util;
+package ejb.util;
 
 import java.util.*;
 import java.io.*;

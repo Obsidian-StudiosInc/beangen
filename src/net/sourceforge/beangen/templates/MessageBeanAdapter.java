@@ -1,4 +1,4 @@
-package ejb.impl.core;
+package ejb.core;
 
 // Standard packages
 
