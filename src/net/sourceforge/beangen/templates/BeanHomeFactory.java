@@ -1,16 +1,17 @@
-package ejb.impl.util;
+package ejb.beangen.util;
 
 // Standard packages
-import	java.util.Map;
-import	java.util.HashMap;
-import	java.util.Collections;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
 
 // Extension packages
-import	javax.ejb.EJBHome;
-import	javax.rmi.PortableRemoteObject;
-import	javax.naming.Context;
-import	javax.naming.InitialContext;
-import	javax.naming.NamingException;
+import javax.ejb.EJBHome;
+import javax.rmi.PortableRemoteObject;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import ejb.beangen.exception.BeanHomeFactoryException;
 
 /**
  *	Design pattern for creating and caching the Home objects for easy access.

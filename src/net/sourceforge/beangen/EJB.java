@@ -40,7 +40,8 @@ package net.sourceforge.beangen;
 
 import java.util.Vector;
 
-public class EJB {
+public class EJB
+{
 	public static final int BMP = 0;
 	public static final int CMP = 1;
 	public static final int STATEFULL = 2;
@@ -50,7 +51,7 @@ public class EJB {
 	protected int type = -1;
 	protected String db_name = null;
 	protected String name = null;
-	protected String app_package = "";
+	protected String app_package = null;
 	protected String description = "";
 	protected String author = "";
 	protected String jndi_basepath = null;
@@ -59,12 +60,12 @@ public class EJB {
 	protected Vector resources = new Vector();
 	protected Vector collections = new Vector();
 
-	protected String getJNDIPath()
+	public String getJNDIPath()
 	{
 		return this.jndi_basepath==null?"":(this.jndi_basepath + "/");
 	}
 
-	protected String getPkName()
+	public String getPkName()
 	{
 		for(int i=0; i<this.fields.size(); i++)
 		{
@@ -77,7 +78,7 @@ public class EJB {
 		return "null";
 	}
 
-	protected String getPkType()
+	public String getPkType()
 	{
 		for(int i=0; i<this.fields.size(); i++)
 		{
@@ -88,10 +89,10 @@ public class EJB {
 		}
 
 		System.err.println("No PK found for :" + this.db_name + " assuming CompoundKey");
-		return TextUtils.toSunClassName(this.name + "_p_k");
+		return getPkPackage() + "." + TextUtils.toSunClassName(this.name + "_p_k");
 	}
 
-	protected String getType()
+	public String getType()
 	{
 		if(this.type==EJB.BMP || this.type==EJB.CMP)
 			return "Entity";
@@ -103,7 +104,7 @@ public class EJB {
 		return "Unknown";
 	}
 
-	protected String getPkDbName()
+	public String getPkDbName()
 	{
 		for(int i=0; i<this.fields.size(); i++)
 		{
@@ -116,7 +117,7 @@ public class EJB {
 		return "null";
 	}
 
-	protected String getManagementType()
+	public String getManagementType()
 	{
 		if(this.type==EJB.BMP)
 			return "Bean";
@@ -128,7 +129,7 @@ public class EJB {
 		return "Unknown";
 	}
 
-	protected boolean needsPkObject()
+	public boolean needsPkObject()
 	{
 		int pk = 0;
 		int fk = 0;
@@ -148,5 +149,85 @@ public class EJB {
 			return true;
 
 		return false;
+	}
+
+	public String getHomePackage()
+	{
+		if(this.app_package == null)
+			return "j2ee.home";
+		else
+			return this.app_package + ".j2ee.home";
+	}
+
+	public String getRemotePackage()
+	{
+		if(this.app_package == null)
+			return "j2ee.remote";
+		else
+			return this.app_package + ".j2ee.remote";
+	}
+
+	public String getEJBPackage()
+	{
+		if(this.app_package == null)
+			return "j2ee.entity";
+		else
+			return this.app_package + ".j2ee.entity";
+	}
+
+	public String getPkPackage()
+	{
+		if(this.app_package == null)
+			return ".pk";
+		else
+			return this.app_package + ".pk";
+	}
+
+	public String getPackage()
+	{
+		if(this.app_package == null)
+			return "";
+		else
+			return this.app_package;
+	}
+
+	public static String getHomePackage(String p)
+	{
+		if("".equals(p))
+			return "j2ee.home";
+		else
+			return p + ".j2ee.home";
+	}
+
+	public static String getRemotePackage(String p)
+	{
+		if("".equals(p))
+			return "j2ee.remote";
+		else
+			return p + ".j2ee.remote";
+	}
+
+	public static String getEJBPackage(String p)
+	{
+		if("".equals(p))
+			return "j2ee.entity";
+		else
+			return p + ".j2ee.entity";
+	}
+
+	public static String getPkPackage(String p)
+	{
+		if("".equals(p))
+			return "pk";
+		else
+			return p + ".pk";
+	}
+
+	public static String getPackage(String p)
+	{
+		if("".equals(p))
+			return "";
+		else
+			return p;
 	}
 }

@@ -26,7 +26,7 @@
 /* warranty.                                                               */
 /*                                                                         */
 /***************************************************************************/
-package ejb.impl.util;
+package ejb.beangen.util;
 
 import java.util.*;
 import java.io.*;
@@ -80,7 +80,7 @@ public class Trace
 
 	public static void out(String txt, int level, boolean forceTime)
 	{
-		if (TRACE_OUT != 0 && TRACE_OUT <= level)
+		if (TRACE_OUT != 0 && level <= TRACE_OUT)
 		{
 			String time = "";
 
@@ -122,7 +122,7 @@ public class Trace
 
 	public static void err(String txt, int level, boolean forceTime)
 	{
-		if (TRACE_ERROR != 0 && TRACE_ERROR <= level)
+		if (TRACE_ERROR != 0 && level <= TRACE_ERROR)
 		{
 			String time = "";
 

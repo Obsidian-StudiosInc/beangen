@@ -5,7 +5,7 @@ CONFIG:OPENEJB:c:/openejb-1.0
 PROJECT:titan:Titan Vacances
 
 # Enable Lazy loading (not fully functional)
-LAZY_LOADING:COLLECTIONS:FIELDS:FKS
+CACHE:COLLECTIONS:FIELDS:FKS
 
 # Define a global DataSource Resource
 RESOURCE:DATASOURCE:dbserver:jdbc/titan:mysql:IDENTITY
@@ -20,12 +20,11 @@ ENTITY:CMP:CABIN:cabin:com.titan.j2ee
 
   AUTHOR:Paulo Lopes
 
-  FIELD:integer:CABIN_ID:id:not null:ro:pk
-  FIELD:integer:SHIP_ID:ship:null:rw:fk
-  FIELD:integer:CABIN_BED_COUNT:bedCount:null
-  # i changed char(30) to varchar
-  FIELD:varchar:CABIN_NAME:name:not null
-  FIELD:integer:CABIN_DECK_LEVEL:deckLevel:null
+  FIELD:integer:CABIN_ID:integer:id:not null:ro:pk
+  FIELD:integer:SHIP_ID:integer:ship:null:rw:fk
+  FIELD:integer:CABIN_BED_COUNT:integer:bedCount:null
+  FIELD:varchar:CABIN_NAME:string:name:not null
+  FIELD:integer:CABIN_DECK_LEVEL:integer:deckLevel:null
 
   # this bean will have a datasource resource
   RESOURCE-LINK:dbserver
@@ -37,10 +36,10 @@ ENTITY:CMP:SHIP:ship:com.titan.j2ee
   AUTHOR:Paulo Lopes
 
   # I don't like BigDecimal... so i'll trick Castor
-  FIELD:integer:SHIP_ID:id:not null:ro:pk
-  FIELD:varchar:SHIP_NAME:name:null
-  FIELD:integer:SHIP_CAPACITY:capacity:null
-  FIELD:double:SHIP_TONNAGE:tonnage:null
+  FIELD:integer:SHIP_ID:integer:id:not null:ro:pk
+  FIELD:varchar:SHIP_NAME:integer:name:null
+  FIELD:integer:SHIP_CAPACITY:integer:capacity:null
+  FIELD:double:SHIP_TONNAGE:integer:tonnage:null
 
   RESOURCE-LINK:dbserver
   # define collections here...
